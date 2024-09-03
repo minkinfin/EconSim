@@ -64,6 +64,7 @@ UserSettings/Layouts/default-2022.dwlt
 log2.2.csv
 chart_meta_0.json
 econ.pdf
-/.vs/EconSim/CopilotIndices/0.2.1634.3922
-/.vs/EconSim/FileContentIndex
 /.vs
+/UserSettings/Layouts
+*.vsconfig
+/Packages/packages-lock.json
