@@ -26,7 +26,7 @@ public class Offer
 	}
 	public void Print()
 	{
-		Debug.Log(agent.gameObject.name + ": " + commodityName + " trade: " + offerPrice + ", " + remainingQuantity);
+		//Debug.Log(agent.gameObject.name + ": " + commodityName + " trade: " + offerPrice + ", " + remainingQuantity);
 	}
 	public void CalculateClearingPrice()
 	{

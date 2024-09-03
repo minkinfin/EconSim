@@ -13,9 +13,8 @@ public class OfferList : List<Offer> {
 	{
 		int before = base.Count;
 		base.RemoveAt(index);
-        if (before != base.Count + 1) 
-			Debug.Log("did not remove trade correctly! before: " 
-			+ before + " after: " + base.Count);
+        //if (before != base.Count + 1) 
+			//Debug.Log("did not remove trade correctly! before: "+ before + " after: " + base.Count);
     }
     public void Shuffle()
     {

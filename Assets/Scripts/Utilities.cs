@@ -114,13 +114,13 @@ public class WeightedRandomPicker<T>
             throw new InvalidOperationException("No items to pick from.");
 
         float randomValue = UnityEngine.Random.Range(0, totalWeight);
-        UnityEngine.Debug.Log("random value: " + randomValue + " total weight: " + totalWeight);
+        //Debug.Log("random value: " + randomValue + " total weight: " + totalWeight);
         float cumulativeWeight = 0;
 
         foreach (var (item, weight) in items)
         {
             cumulativeWeight += weight;
-            UnityEngine.Debug.Log("randompicker: good: " + item + " cumweight: " + cumulativeWeight);
+            //Debug.Log("randompicker: good: " + item + " cumweight: " + cumulativeWeight);
             if (randomValue < cumulativeWeight)
                 return item;
         }

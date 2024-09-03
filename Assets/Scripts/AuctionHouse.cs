@@ -132,22 +132,22 @@ public class AuctionHouse : MonoBehaviour
     // Update is called once per frame
     void FixedUpdate()
     {
-//        if (auctionTracker.round > maxRounds || timeToQuit)
-//        {
-//            CloseWriteFile();
-//#if UNITY_EDITOR
-//            UnityEditor.EditorApplication.isPlaying = false;
-//#elif UNITY_WEBPLAYER
-//        Application.OpenURL("127.0.0.1");
-//#else
-//        Application.Quit();
-//#endif
-//            return;
-//        }
+        //        if (auctionTracker.round > maxRounds || timeToQuit)
+        //        {
+        //            CloseWriteFile();
+        //#if UNITY_EDITOR
+        //            UnityEditor.EditorApplication.isPlaying = false;
+        //#elif UNITY_WEBPLAYER
+        //        Application.OpenURL("127.0.0.1");
+        //#else
+        //        Application.Quit();
+        //#endif
+        //            return;
+        //        }
         //wait before update
         if (Time.time - lastTick > tickInterval)
         {
-            Debug.Log("v1.4 Round: " + auctionTracker.round);
+            //Debug.Log("v1.4 Round: " + auctionTracker.round);
             //sampler.BeginSample("AuctionHouseTick");
             Tick();
             //sampler.EndSample();
@@ -157,7 +157,7 @@ public class AuctionHouse : MonoBehaviour
     }
     void Tick()
     {
-        Debug.Log("auction house ticking");
+        //Debug.Log("auction house ticking");
 
         var com = auctionTracker.book;
         foreach (var agent in agents)
@@ -169,20 +169,18 @@ public class AuctionHouse : MonoBehaviour
                 idleTax = agent.PayTax(config.idleTaxRate);
                 irs += idleTax;
             }
-            Debug.Log(AuctionStats.Instance.round + " " + agent.name + " has " + agent.cash.ToString("c2") + " produced " + numProduced + " goods and idle taxed " + idleTax.ToString("c2"));
+            //Debug.Log(AuctionStats.Instance.round + " " + agent.name + " has " + agent.cash.ToString("c2") + " produced " + numProduced + " goods and idle taxed " + idleTax.ToString("c2"));
             askTable.Add(agent.CreateAsks());
             //Utilities.TransferQuantity(idleTax, agent, irs);
             bidTable.Add(agent.Consume(com));
         }
-
         //resolve prices
         foreach (var entry in com)
         {
             ResolveOffers(entry.Value);
-            Debug.Log(entry.Key + ": have " + entry.Value.trades[^1] + " at price: " + entry.Value.avgClearingPrice[^1]);
+            //Debug.Log(entry.Key + ": have " + entry.Value.trades[^1] + " at price: " + entry.Value.avgClearingPrice[^1]);
         }
-
-        AgentsStats();
+        //AgentsStats();
         CountProfits();
         CountProfessions();
         CountStockPileAndCash();
@@ -237,7 +235,7 @@ public class AuctionHouse : MonoBehaviour
         {
             commodity.avgBidPrice.Add(bids.Sum((x) => x.offerPrice * x.offerQuantity) / quantityToBuy);
         }
-        PrintAuctionStats(commodity.name, quantityToBuy, quantityToSell);
+        //PrintAuctionStats(commodity.name, quantityToBuy, quantityToSell);
 
         asks.Shuffle();
         bids.Shuffle();
@@ -265,17 +263,17 @@ public class AuctionHouse : MonoBehaviour
             // =========== trade ============== 
             var tradeQuantity = Mathf.Min(bid.remainingQuantity, ask.remainingQuantity);
             // Debug.Log(commodity.name + ": " + ask.agent.name + " asked: " + ask.remainingQuantity.ToString("n2") + " and " + bid.agent.name + " bided: " + bid.remainingQuantity.ToString("n2"));
-            Assert.IsTrue(tradeQuantity > 0);
-            Assert.IsTrue(clearingPrice > 0);
+            //Assert.IsTrue(tradeQuantity > 0);
+            //Assert.IsTrue(clearingPrice > 0);
 #if false
 				Trade(commodity, clearingPrice, bid.agent, ask.agent);
 #else
             var boughtQuantity = bid.agent.Buy(commodity.name, tradeQuantity, clearingPrice);
-            Assert.IsTrue(boughtQuantity == tradeQuantity);
+            //Assert.IsTrue(boughtQuantity == tradeQuantity);
             ask.agent.Sell(commodity.name, boughtQuantity, clearingPrice);
-            Debug.Log(auctionTracker.round + ": " + ask.agent.name + " ask " + ask.remainingQuantity.ToString("n2") + "x" + ask.offerPrice.ToString("c2")
-                    + " | " + bid.agent.name + " bid: " + bid.remainingQuantity.ToString("n2") + "x" + bid.offerPrice.ToString("c2")
-                    + " -- " + commodity.name + " offer quantity: " + tradeQuantity.ToString("n2") + " bought quantity: " + boughtQuantity.ToString("n2"));
+            //Debug.Log(auctionTracker.round + ": " + ask.agent.name + " ask " + ask.remainingQuantity.ToString("n2") + "x" + ask.offerPrice.ToString("c2")
+            //+ " | " + bid.agent.name + " bid: " + bid.remainingQuantity.ToString("n2") + "x" + bid.offerPrice.ToString("c2")
+            //+ " -- " + commodity.name + " offer quantity: " + tradeQuantity.ToString("n2") + " bought quantity: " + boughtQuantity.ToString("n2"));
 #endif
             //track who bought what
             var buyers = trackBids[commodity.name];
@@ -302,18 +300,18 @@ public class AuctionHouse : MonoBehaviour
             watchdog_timer++;
             if (watchdog_timer > 1000)
             {
-                Debug.Log("Can't seem to sell: " + commodity.name + " bought: " + boughtQuantity + " for " + clearingPrice.ToString("c2"));
-                Assert.IsTrue(watchdog_timer < 1000);
+                //Debug.Log("Can't seem to sell: " + commodity.name + " bought: " + boughtQuantity + " for " + clearingPrice.ToString("c2"));
+                //Assert.IsTrue(watchdog_timer < 1000);
             }
         }
-        Assert.IsFalse(goodsExchangedThisRound < 0);
+        //Assert.IsFalse(goodsExchangedThisRound < 0);
         ////////////////////////////////////////////
         // END OF BIG LOOP
         ////////////////////////////////////////////
 
         var denom = (goodsExchangedThisRound == 0) ? 1 : goodsExchangedThisRound;
         var averagePrice = moneyExchangedThisRound / denom;
-        Debug.Log(auctionTracker.round + ": " + commodity.name + ": " + goodsExchangedThisRound + " traded at average price of " + averagePrice);
+        //Debug.Log(auctionTracker.round + ": " + commodity.name + ": " + goodsExchangedThisRound + " traded at average price of " + averagePrice);
         commodity.trades.Add(goodsExchangedThisRound);
         commodity.avgClearingPrice.Add(averagePrice);
         commodity.Update(averagePrice, agentDemandRatio);
@@ -451,8 +449,8 @@ public class AuctionHouse : MonoBehaviour
             else
                 return 0;
         }
-        Assert.IsTrue(index < buckets);
-        Assert.IsTrue(index >= 0);
+        //Assert.IsTrue(index < buckets);
+        //Assert.IsTrue(index >= 0);
         var numPerQuantile = list.Count / buckets;
         var numQuantiles = buckets;
         var begin = Mathf.Max(0, index * numPerQuantile);
@@ -527,13 +525,13 @@ public class AuctionHouse : MonoBehaviour
             var tradeVolume = entry.Value.trades.LastSum(numRoundsNoTrade);
             if (auctionTracker.round > numRoundsNoTrade && tradeVolume == 0)
             {
-                Debug.Log("quitting!! last " + numRoundsNoTrade + " round average " + commodity + " was : " + tradeVolume);
+                //Debug.Log("quitting!! last " + numRoundsNoTrade + " round average " + commodity + " was : " + tradeVolume);
                 timeToQuit = true;
                 //TODO should be no trades in n rounds
             }
             else
             {
-                Debug.Log("last " + numRoundsNoTrade + " round trade average for " + commodity + " was : " + tradeVolume);
+                //Debug.Log("last " + numRoundsNoTrade + " round trade average for " + commodity + " was : " + tradeVolume);
             }
         }
     }

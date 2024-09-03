@@ -79,7 +79,7 @@ public class AuctionStats : MonoBehaviour
 			mostDemand = picker.PickRandom();
 		}
 		var best_ratio = picker.GetWeight(mostDemand);
-		Debug.Log(round + " picked demand: " + mostDemand + ": " + best_ratio);
+		//Debug.Log(round + " picked demand: " + mostDemand + ": " + best_ratio);
 		log_msg += round + ", auction, " + mostDemand + ", none, hottestGood, " + best_ratio + ", n/a\n";
 		return mostDemand;
 	}
@@ -116,7 +116,7 @@ public class AuctionStats : MonoBehaviour
 				mostDemand = c.Key;
 				picker.AddItem(c.Key, 1);//Mathf.Sqrt(ratio)); //less likely a profession dies out
 			}
-			Debug.Log(round + " demand: " + c.Key + ": " + Mathf.Sqrt(best_ratio));
+			//Debug.Log(round + " demand: " + c.Key + ": " + Mathf.Sqrt(best_ratio));
 			log_msg += round + ", auction, " + c.Key + ", none, demandsupplyratio, " + Mathf.Sqrt(ratio) + ", n/a\n";
 		}
 		gotHottestGoodRound = round;
@@ -134,20 +134,20 @@ public class AuctionStats : MonoBehaviour
     {
 		foreach (var item in book)
 		{
-			Debug.Log(item.Key + ": " + item.Value.price);
+			//Debug.Log(item.Key + ": " + item.Value.price);
 			if (item.Value.dep != null)
 			{
-				Debug.Log("Dependencies: " );
+				//Debug.Log("Dependencies: " );
 				foreach (var depItem in item.Value.dep)
 				{
-                    Debug.Log(" -> " + depItem.Key + ": " + depItem.Value);
+                    //Debug.Log(" -> " + depItem.Key + ": " + depItem.Value);
 				}
 			}
 		}
 	}
     // Use this for initialization
     void Init () {
-		Debug.Log("Initializing commodities");
+		//Debug.Log("Initializing commodities");
 		foreach( var item in initialization)
 		{
 			Dependency dep = new Dependency();
@@ -163,7 +163,7 @@ public class AuctionStats : MonoBehaviour
 			}
 			if (!Add(item.Key, prod_rate, dep))
 			{
-				Debug.Log("Failed to add commodity; duplicate?");
+				//Debug.Log("Failed to add commodity; duplicate?");
 			}
 		}
 		//PrintStat();

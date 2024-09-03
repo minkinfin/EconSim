@@ -32,7 +32,7 @@ public class GraphLead : MonoBehaviour {
 	}
 	public void SetMaxY(float y)
 	{
-		Debug.Log("old maxy: " + lMax.y + " new: " + y);
+		//Debug.Log("old maxy: " + lMax.y + " new: " + y);
 		lMax.y = y;
 	}
 	public void ResetYBounds()
@@ -75,7 +75,7 @@ public class GraphLead : MonoBehaviour {
 		axis.positionCount = 4;
 
 		var hi = Hierarchy(go);
-		Debug.Log(hi + " numPos: " + axis.positionCount );
+		//Debug.Log(hi + " numPos: " + axis.positionCount );
 		axis.SetPosition(0, pymax.transform.position);
 		axis.SetPosition(1, pymin.transform.position);
 		axis.SetPosition(2, pymin.transform.position);
@@ -105,7 +105,7 @@ public class GraphLead : MonoBehaviour {
 		tmp.y = pyzero.y;
 		var hi = Hierarchy(gameObject);
 		axis.positionCount = 4;
-		Debug.Log(hi + " numPos: " + axis.positionCount + " pos3: " + tmp.ToString());
+		//Debug.Log(hi + " numPos: " + axis.positionCount + " pos3: " + tmp.ToString());
 		axis.SetPosition(3, tmp);
 		*/
     }

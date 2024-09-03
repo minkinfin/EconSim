@@ -15,7 +15,7 @@ public class TextOutput
         //AssetDatabase.ImportAsset(path); 
         //TextAsset asset = Resources.Load("test");
         ////Print the text from the file
-        Debug.Log("test writing to file test.txt");
+        //Debug.Log("test writing to file test.txt");
     }
     [MenuItem("Tools/Read file")]
     static void ReadString()
@@ -23,7 +23,7 @@ public class TextOutput
         string path = "Assets/Resources/test.txt";
         //Read the text from directly from the test.txt file
         StreamReader reader = new StreamReader(path); 
-        Debug.Log(reader.ReadToEnd());
+        //Debug.Log(reader.ReadToEnd());
         reader.Close();
     }
 }

@@ -81,7 +81,7 @@ public class InventoryItem {
 		commodityName = _name;
 		Quantity = _quantity;
 		maxQuantity = _maxQuantity;
-        Assert.IsTrue(_meanPrice >= 0); //TODO really should never be 0???
+        //Assert.IsTrue(_meanPrice >= 0); //TODO really should never be 0???
 		minPriceBelief = _meanPrice / 2;
 		maxPriceBelief = _meanPrice * 2;
 		meanCostThisRound = _meanPrice;
@@ -96,13 +96,13 @@ public class InventoryItem {
     public float Increase(float quant)
     {
         Quantity += quant;
-        Assert.IsTrue(quant >= 0);
+        //Assert.IsTrue(quant >= 0);
         return Quantity;
     }
     public float Decrease(float quant)
     {
         Quantity -= quant;
-        //Assert.IsTrue(Quantity >= 0);
+        ////Assert.IsTrue(Quantity >= 0);
         return Quantity;
     }
     public void ClearRoundStats() 
@@ -116,7 +116,7 @@ public class InventoryItem {
 	{
         // UnityEngine.Debug.Log("buying " + commodityName + " " + quant.ToString("n2") + " for " + price.ToString("c2") + " currently have " + Quantity.ToString("n2"));
 		//update meanCost of units in stock
-        Assert.IsTrue(quant > 0);
+        //Assert.IsTrue(quant > 0);
 
         meanCostThisRound = (quantityTradedThisRound == 0) ? 0 : costThisRound / quantityTradedThisRound;
         meanCost = (meanCost * Quantity + quant * price) / (Quantity + quant);
@@ -139,12 +139,12 @@ public class InventoryItem {
 	public void Sell(float quant, float price)
 	{
 		//update meanCost of units in stock
-        Assert.IsTrue(Quantity >= 0);
+        //Assert.IsTrue(Quantity >= 0);
         if (quant == 0 || Surplus() == 0)
             return;
         // UnityEngine.Debug.Log("sell quant is " + quant + " and surplus is " + Surplus());
         quant = Mathf.Min(quant, Surplus());
-        Assert.IsTrue(quant > 0);
+        //Assert.IsTrue(quant > 0);
 		Quantity -= quant;
         quantityTradedThisRound += quant;
         costThisRound += price;
@@ -170,7 +170,7 @@ public class InventoryItem {
 		minPriceBelief = Mathf.Clamp(minPriceBelief, 0.1f, 900f);
 		maxPriceBelief = Mathf.Max(minPriceBelief*1.1f, maxPriceBelief);
 		maxPriceBelief = Mathf.Clamp(maxPriceBelief, 1.1f, 1000f);
-        Assert.IsTrue(minPriceBelief < maxPriceBelief);
+        //Assert.IsTrue(minPriceBelief < maxPriceBelief);
 	}
 	
     public void UpdateBuyerPriceBelief(String agentName, in Offer trade, in Commodity commodity)
@@ -184,7 +184,7 @@ public class InventoryItem {
         var quantityBought = trade.offerQuantity - trade.remainingQuantity;
         var historicalMeanPrice = commodity.avgClearingPrice.LastAverage(10);
         var displacement = deltaMean / historicalMeanPrice;
-        Assert.IsTrue(historicalMeanPrice >= 0);
+        //Assert.IsTrue(historicalMeanPrice >= 0);
         string reason_msg = "none";
 
         if ( quantityBought * 2 > trade.offerQuantity ) //at least 50% offer filled
@@ -232,7 +232,7 @@ public class InventoryItem {
         SanePriceBeliefs();
         // UnityEngine.Debug.Log("buyer " + agentName + " stock: " + commodityName + " min price belief: " + prevMinPriceBelief + " -> " + minPriceBelief);
         // UnityEngine.Debug.Log("buyer " + agentName + " stock: " + commodityName + " max price belief: " + prevMaxPriceBelief + " -> " + maxPriceBelief);
-        Assert.IsTrue(minPriceBelief < maxPriceBelief);
+        //Assert.IsTrue(minPriceBelief < maxPriceBelief);
         debug_msgs.Add(reason_msg);
     }
 public void UpdateSellerPriceBelief(String agentName, in Offer trade, in Commodity commodity)
@@ -286,10 +286,10 @@ public void UpdateSellerPriceBelief(String agentName, in Offer trade, in Commodi
         //ensure buildable price at least cost of input commodities
 
 		SanePriceBeliefs();
-		Assert.IsFalse(float.IsNaN(minPriceBelief));
+		//Assert.IsFalse(float.IsNaN(minPriceBelief));
         // UnityEngine.Debug.Log("seller " + agentName + " stock: " + commodityName + " min price belief: " + prevMinPriceBelief + " -> " + minPriceBelief);
         // UnityEngine.Debug.Log("seller " + agentName + " stock: " + commodityName + " max price belief: " + prevMaxPriceBelief + " -> " + maxPriceBelief);
-        Assert.IsTrue(minPriceBelief < maxPriceBelief);
+        //Assert.IsTrue(minPriceBelief < maxPriceBelief);
         debug_msgs.Add(reason_msg);
 	}
 	//TODO change quantity based on historical price ranges & deficit

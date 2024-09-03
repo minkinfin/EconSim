@@ -9,7 +9,6 @@ using AYellowpaper.SerializedCollections;
 public class AgentConfig : MonoBehaviour
 {
     public int seed;
-    public bool enableWriteFile = false;
 
     public float initCash = 100;
     public bool randomInitStock = false;
@@ -26,6 +25,8 @@ public class AgentConfig : MonoBehaviour
     public bool buyerBuysAskPrice = true;
     [Tooltip("Use highest bid good vs most demand to supply good")]
     public int historySize = 10;
+    public bool enableWriteFile = false;
+    public float backruptThreshold = 10;
     public void start()
     {
         //foodConsumption = foodConsumptionRate != 0.0f;
