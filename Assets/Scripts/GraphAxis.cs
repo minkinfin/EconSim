@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class GraphAxis : MonoBehaviour {
 
-	GameObject pymax, pymin, pxmax;
+	public GameObject pymax, pymin, pxmax;
 	// Use this for initialization
 	void Start () {
 		pymax = transform.parent.Find("pymax").gameObject;
@@ -16,10 +16,5 @@ public class GraphAxis : MonoBehaviour {
 		axis.SetPosition(0, pymax.transform.position);
 		axis.SetPosition(1, pymin.transform.position);
 		axis.SetPosition(2, pxmax.transform.position);
-	}
-	
-	// Update is called once per frame
-	void Update () {
-		
 	}
 }

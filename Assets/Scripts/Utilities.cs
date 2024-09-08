@@ -32,6 +32,7 @@ public class ESList : List<float>
     float avg;
     int lastRound = 0;
     AuctionStats comInstance;
+    int maxLength = 100;
     public ESList()
     {
         comInstance = AuctionStats.Instance;
@@ -40,6 +41,10 @@ public class ESList : List<float>
     {
         base.Add(num);
         lastRound = comInstance.round;
+        if(base.Count > maxLength)
+        {
+            base.RemoveAt(0);
+        }
     }
     public float LastHighest(int history)
     {
@@ -110,9 +115,6 @@ public class WeightedRandomPicker<T>
     }
     public T PickRandom()
     {
-        if (items.Count == 0)
-            throw new InvalidOperationException("No items to pick from.");
-
         float randomValue = UnityEngine.Random.Range(0, totalWeight);
         //Debug.Log("random value: " + randomValue + " total weight: " + totalWeight);
         float cumulativeWeight = 0;
@@ -126,5 +128,9 @@ public class WeightedRandomPicker<T>
         }
 
         return items[items.Count - 1].item; // Fallback, should rarely happen
+    }
+    public List<(T item, float weight)> GetItems()
+    {
+        return items;
     }
 }

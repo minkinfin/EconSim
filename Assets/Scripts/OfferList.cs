@@ -44,15 +44,4 @@ public class OfferList : List<Offer> {
         return totalPrice / totalQuantity;
     }
     */
-	public void Print()
-	{
-		var enumerator = base.GetEnumerator();
-        while (enumerator.MoveNext())
-        {
-            var item = enumerator.Current;
-			item.Print();
-		}
-	}
-
-
 }

@@ -35,7 +35,7 @@ public class EconAgent : MonoBehaviour
     Dictionary<string, float> producedThisRound = new Dictionary<string, float>();
     string log = "";
 
-    public String Stats(String header)
+    public string Stats(string header)
     {
         header += uid.ToString() + ", " + outputs[0] + ", "; //profession
         foreach (var stock in inventory)
@@ -136,7 +136,7 @@ public class EconAgent : MonoBehaviour
             //Debug.Log(AuctionStats.Instance.round + ": " + name + " reinit2: " + msg );
             //don't give bankrupt agents more goods! just money and maybe food?
 
-            inventory["Food"].Increase(2);
+            //inventory["Food"].Increase(2);
             foreach (var dep in com[buildable].dep)
             {
                 var commodity = dep.Key;
@@ -382,6 +382,10 @@ public class EconAgent : MonoBehaviour
             foreach (var dep in com[buildable].dep)
             {
                 var numNeeded = dep.Value;
+
+                
+                //inventory.Add(dep.Key, new InventoryItem(dep.Key, 0, maxStock, com[dep.Key].price, com[dep.Key].production));
+
                 var numAvail = inventory[dep.Key].Quantity;
                 numProduced = Mathf.Min(numProduced, numAvail / numNeeded);
                 //Debug.Log(AuctionStats.Instance.round + " " + name + "can produce " + numProduced + " w/" + numAvail + "/" + numNeeded + dep.Key );

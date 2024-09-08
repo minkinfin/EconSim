@@ -39,9 +39,9 @@ public class InventoryItem {
 
 
 
-    public String Stats(String header) 
+    public string Stats(string header) 
     {
-        String ret = header + commodityName + ", stock, " + Quantity + ",n/a\n"; 
+        string ret = header + commodityName + ", stock, " + Quantity + ",n/a\n"; 
         foreach( var msg in debug_msgs )
         {
             //ret += header + commodityName + ", " + msg + "\n";
@@ -173,7 +173,7 @@ public class InventoryItem {
         //Assert.IsTrue(minPriceBelief < maxPriceBelief);
 	}
 	
-    public void UpdateBuyerPriceBelief(String agentName, in Offer trade, in Commodity commodity)
+    public void UpdateBuyerPriceBelief(string agentName, in Offer trade, in Commodity commodity)
     {
         var prevMinPriceBelief = minPriceBelief;
         var prevMaxPriceBelief = maxPriceBelief;
@@ -235,7 +235,7 @@ public class InventoryItem {
         //Assert.IsTrue(minPriceBelief < maxPriceBelief);
         debug_msgs.Add(reason_msg);
     }
-public void UpdateSellerPriceBelief(String agentName, in Offer trade, in Commodity commodity)
+public void UpdateSellerPriceBelief(string agentName, in Offer trade, in Commodity commodity)
     {
         var prevMinPriceBelief = minPriceBelief;
         var prevMaxPriceBelief = maxPriceBelief;

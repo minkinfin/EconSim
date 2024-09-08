@@ -21,7 +21,7 @@ public class AuctionStats : MonoBehaviour
 	public int round { get; private set; }
 
 	[SerializedDictionary("ID", "Dependency")]
-	public SerializedDictionary<string, SerializedDictionary<string, float>> initialization;
+	public SerializedDictionary<string,SerializedKeyValuePair<float, SerializedDictionary<string, float>>> initialization;
 	string log_msg = "";
 	public string GetLog()
 	{
@@ -74,7 +74,7 @@ public class AuctionStats : MonoBehaviour
 		{
 			mostDemand = _GetHottestGood();
 		}
-		if (probabilisticHottestGood && !changeToHighestBidPrice)
+		if (probabilisticHottestGood && !changeToHighestBidPrice && picker.GetItems().Count > 0)
 		{
 			mostDemand = picker.PickRandom();
 		}
@@ -151,14 +151,9 @@ public class AuctionStats : MonoBehaviour
 		foreach( var item in initialization)
 		{
 			Dependency dep = new Dependency();
-			float prod_rate = 0;
-			foreach (var field in item.Value)
+			float prod_rate = item.Value.Key;
+			foreach (var field in item.Value.Value)
 			{
-				if (field.Key == "Prod_rate")
-				{
-					prod_rate = field.Value;
-					continue;
-				}
 				dep.Add(field.Key, field.Value);
 			}
 			if (!Add(item.Key, prod_rate, dep))

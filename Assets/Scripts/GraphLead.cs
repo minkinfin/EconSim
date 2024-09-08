@@ -80,14 +80,11 @@ public class GraphLead : MonoBehaviour {
 		axis.SetPosition(1, pymin.transform.position);
 		axis.SetPosition(2, pymin.transform.position);
 		axis.SetPosition(3, pxmax.transform.position);
-
-
 	}
 	bool firstThisUpdate = true;
 	// Update is called once per frame
 	void LateUpdate () {
-		return;
-		/*
+		
 		firstThisUpdate = true;
 		//TODO roll this back: rn getting null ref exception
 		//tXmin.text = (lMin.x.ToString("n2"));
@@ -96,18 +93,18 @@ public class GraphLead : MonoBehaviour {
 		//tYmax.text = (lMax.y.ToString("n2"));
 
 		//set zero line (position 2 and 3)
-		float lyzero = Mathf.InverseLerp(lMin.y, lMax.y, 0);
-		var pyzero = Vector3.Lerp(pymin.transform.position, pymax.transform.position, lyzero);
-		//var pyzero = lyzero * (pymax.transform.position) - pymin.transform.position;
+		//float lyzero = Mathf.InverseLerp(lMin.y, lMax.y, 0);
+		//var pyzero = Vector3.Lerp(pymin.transform.position, pymax.transform.position, lyzero);
+		////var pyzero = lyzero * (pymax.transform.position) - pymin.transform.position;
 
-		axis.SetPosition(2, pyzero);
-		var tmp = pxmax.transform.position;
-		tmp.y = pyzero.y;
-		var hi = Hierarchy(gameObject);
-		axis.positionCount = 4;
-		//Debug.Log(hi + " numPos: " + axis.positionCount + " pos3: " + tmp.ToString());
-		axis.SetPosition(3, tmp);
-		*/
+		//axis.SetPosition(2, pyzero);
+		//var tmp = pxmax.transform.position;
+		//tmp.y = pyzero.y;
+		//var hi = Hierarchy(gameObject);
+		//axis.positionCount = 4;
+		////Debug.Log(hi + " numPos: " + axis.positionCount + " pos3: " + tmp.ToString());
+		//axis.SetPosition(3, tmp);
+		
     }
 	string Hierarchy(GameObject go, int num=0)
 	{
