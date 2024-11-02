@@ -113,21 +113,21 @@ public class WeightedRandomPicker<T>
         }
         return -1f;
     }
-    public T PickRandom()
+    public (T, float) PickRandom()
     {
         float randomValue = UnityEngine.Random.Range(0, totalWeight);
         //Debug.Log("random value: " + randomValue + " total weight: " + totalWeight);
         float cumulativeWeight = 0;
 
-        foreach (var (item, weight) in items)
+        foreach (var item in items)
         {
-            cumulativeWeight += weight;
+            cumulativeWeight += item.weight;
             //Debug.Log("randompicker: good: " + item + " cumweight: " + cumulativeWeight);
             if (randomValue < cumulativeWeight)
                 return item;
         }
 
-        return items[items.Count - 1].item; // Fallback, should rarely happen
+        return items[items.Count - 1]; // Fallback, should rarely happen
     }
     public List<(T item, float weight)> GetItems()
     {

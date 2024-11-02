@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -10,12 +11,29 @@ public class LineGraphRenderer : Graphic
     public List<float> points;
     public bool center = true;
     public int maxPlot = 50;
+    public TextMeshProUGUI label;
 
     float width;
     float height;
     float maxHeight;
     float unitWidth;
     float unitHeight;
+
+    void Update()
+    {
+        if (label != null && points.Count > 0)
+        {
+        float pointValue = points[points.Count - 1];
+            if (pointValue % 1 == 0)
+            {
+                label.SetText(((int)pointValue).ToString());
+            }
+            else
+            {
+                label.SetText(pointValue.ToString("0.00"));
+            }
+        }
+    }
 
     protected override void OnPopulateMesh(VertexHelper vh)
     {
@@ -83,6 +101,12 @@ public class LineGraphRenderer : Graphic
 
         // Also add the end point
         vertex.position = point2 - offset;
+
+
+        if (label != null)
+        {
+            label.rectTransform.localPosition = new Vector3(label.transform.localPosition.x, vertex.position.y, label.transform.localPosition.z);
+        }
         vh.AddVert(vertex);
     }
 

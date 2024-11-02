@@ -27,8 +27,21 @@ public class AgentConfig : MonoBehaviour
     public int historySize = 10;
     public bool enableWriteFile = false;
     public float backruptThreshold = 10;
-    public void start()
+    public ChangeProductionMode changeProductionMode;
+    public bool appendTimeToLog = false;
+    public float tickInterval = .001f;
+    public bool EnableDebug = false;
+
+    public void Start()
     {
-        //foodConsumption = foodConsumptionRate != 0.0f;
+        UnityEngine.Random.InitState(seed);
+        Debug.unityLogger.logEnabled = EnableDebug;
     }
+}
+
+public enum ChangeProductionMode
+{
+    HighestBidPrice,
+    ProbabilisticHottestGood,
+    Random
 }

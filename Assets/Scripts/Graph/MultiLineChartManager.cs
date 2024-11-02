@@ -1,15 +1,18 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using TMPro;
 using UnityEngine;
 
 public class MultiLineChartManager : MonoBehaviour
 {
     Dictionary<string, LineGraphRenderer> lineGraphRenderers;
     public int maxPlot = 50;
-    void Start()
+    public TextMeshProUGUI title;
+    void Awake()
     {
         lineGraphRenderers = new Dictionary<string, LineGraphRenderer>();
+        title.SetText(name);
     }
 
     public void Init(AuctionStats stats, Dictionary<string, Material> commColors)

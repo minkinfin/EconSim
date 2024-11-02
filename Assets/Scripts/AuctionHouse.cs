@@ -4,14 +4,10 @@ using System.IO;
 using System.Linq;
 using UnityEngine;
 using AYellowpaper.SerializedCollections;
-using static UnityEngine.EventSystems.EventTrigger;
 
 public class AuctionHouse : MonoBehaviour
 {
     protected AgentConfig config;
-    public int seed = 42;
-    public bool appendTimeToLog = false;
-    public float tickInterval = .001f;
     public int maxRounds = 10;
     public bool exitAfterNoTrade = true;
     public int numRoundsNoTrade = 100;
@@ -31,21 +27,17 @@ public class AuctionHouse : MonoBehaviour
     protected bool timeToQuit = false;
     protected OfferTable askTable, bidTable;
     protected StreamWriter sw;
-    protected AuctionStats auctionTracker;
-
+    protected AuctionStats auctionStats;
     protected Dictionary<string, Dictionary<string, float>> trackBids = new();
     protected float lastTick;
-    public bool EnableDebug = false;
     void Start()
     {
-        Debug.unityLogger.logEnabled = EnableDebug;
         config = GetComponent<AgentConfig>();
         OpenFileForWrite();
 
-        UnityEngine.Random.InitState(seed);
         lastTick = 0;
-        auctionTracker = AuctionStats.Instance;
-        var com = auctionTracker.book;
+        auctionStats = AuctionStats.Instance;
+        var com = auctionStats.book;
 
         irs = 0;
         var prefab = Resources.Load("Agent");
@@ -59,10 +51,10 @@ public class AuctionHouse : MonoBehaviour
 
         int agentIndex = 0;
         var professions = numAgents.Keys;
-        var resoucrces = auctionTracker.initialization.Select(x => x.Key).ToArray();
+        var resources = auctionStats.recipes.Select(x => x.Key).ToArray();
         foreach (string profession in professions)
         {
-            if (!resoucrces.Contains(profession))
+            if (!resources.Contains(profession))
                 continue;
 
             for (int i = 0; i < numAgents[profession]; ++i)
@@ -88,8 +80,7 @@ public class AuctionHouse : MonoBehaviour
     }
     void InitAgent(EconAgent agent, string type)
     {
-        List<string> buildables = new List<string>();
-        buildables.Add(type);
+        List<string> buildables = new List<string> { type };
         float initStock = config.initStock;
         float initCash = config.initCash;
         if (config.randomInitStock)
@@ -118,19 +109,19 @@ public class AuctionHouse : MonoBehaviour
         //            return;
         //        }
         //wait before update
-        if (Time.time - lastTick > tickInterval)
+        if (Time.time - lastTick > config.tickInterval)
         {
             //Debug.Log("v1.4 Round: " + auctionTracker.round);
             //sampler.BeginSample("AuctionHouseTick");
             Tick();
             //sampler.EndSample();
             lastTick = Time.time;
-            auctionTracker.nextRound();
+            auctionStats.nextRound();
         }
     }
     void Tick()
     {
-        var com = auctionTracker.book;
+        var com = auctionStats.book;
         foreach (var agent in agents)
         {
             var numProduced = agent.Produce(com);
@@ -163,14 +154,14 @@ public class AuctionHouse : MonoBehaviour
 
     protected void PrintAuctionStats(string c, float buy, float sell)
     {
-        string header = auctionTracker.round + ", auction, none, " + c + ", ";
+        string header = auctionStats.round + ", auction, none, " + c + ", ";
         string msg = header + "bid, " + buy + ", n/a\n";
         msg += header + "ask, " + sell + ", n/a\n";
-        msg += header + "avgAskPrice, " + auctionTracker.book[c].avgAskPrice[^1] + ", n/a\n";
-        msg += header + "avgBidPrice, " + auctionTracker.book[c].avgBidPrice[^1] + ", n/a\n";
-        header = auctionTracker.round + ", auction, none, none, ";
+        msg += header + "avgAskPrice, " + auctionStats.book[c].avgAskPrice[^1] + ", n/a\n";
+        msg += header + "avgBidPrice, " + auctionStats.book[c].avgBidPrice[^1] + ", n/a\n";
+        header = auctionStats.round + ", auction, none, none, ";
         msg += header + "irs, " + irs + ", n/a\n";
-        msg += auctionTracker.GetLog();
+        msg += auctionStats.GetLog();
 
         PrintToFile(msg);
     }
@@ -248,10 +239,21 @@ public class AuctionHouse : MonoBehaviour
             }
         }
 
-        var denom = (goodsExchangedThisRound == 0) ? 1 : goodsExchangedThisRound;
-        var averagePrice = moneyExchangedThisRound / denom;
-        commodity.trades.Add(goodsExchangedThisRound);
+        float averagePrice = 0;
+        if (goodsExchangedThisRound == 0 && commodity.trades.Count > 0)
+        {
+            goodsExchangedThisRound = commodity.trades.Last();
+        }
+
+        if (moneyExchangedThisRound == 0 && commodity.avgClearingPrice.Count > 0)
+        {
+            averagePrice = commodity.avgClearingPrice.Last();
+        }
+        else if (goodsExchangedThisRound != 0)
+            averagePrice = moneyExchangedThisRound / goodsExchangedThisRound;
+
         commodity.avgClearingPrice.Add(averagePrice);
+        commodity.trades.Add(goodsExchangedThisRound);
         commodity.Update(averagePrice, agentDemandRatio);
 
         //var excessDemand = asks.Sum(ask => ask.quantity);
@@ -287,7 +289,7 @@ public class AuctionHouse : MonoBehaviour
             return;
 
         var datepostfix = DateTime.Now.ToString(@"yyyy-MM-dd-h_mm_tt");
-        if (appendTimeToLog)
+        if (config.appendTimeToLog)
         {
             sw = new StreamWriter("log_" + datepostfix + ".csv");
         }
@@ -314,7 +316,7 @@ public class AuctionHouse : MonoBehaviour
 
     protected void AgentsStats()
     {
-        string header = auctionTracker.round + ", ";
+        string header = auctionStats.round + ", ";
         string msg = "";
         foreach (var agent in agents)
         {
@@ -327,7 +329,7 @@ public class AuctionHouse : MonoBehaviour
         Dictionary<string, float> stockPile = new Dictionary<string, float>();
         Dictionary<string, List<float>> stockList = new Dictionary<string, List<float>>();
         Dictionary<string, List<float>> cashList = new Dictionary<string, List<float>>();
-        var com = auctionTracker.book;
+        var com = auctionStats.book;
         float totalCash = 0;
         foreach (var entry in com)
         {
@@ -355,8 +357,8 @@ public class AuctionHouse : MonoBehaviour
         {
             int bucket = 1, index = 0;
             var avg = GetQuantile(stockList[stock.Key], bucket, index);
-            auctionTracker.book[stock.Key].stocks.Add(avg);
-            auctionTracker.book[stock.Key].capitals.Add(cashList[stock.Key].Sum());
+            auctionStats.book[stock.Key].stocks.Add(avg);
+            auctionStats.book[stock.Key].capitals.Add(cashList[stock.Key].Sum());
         }
     }
     protected float GetQuantile(List<float> list, int buckets = 4, int index = 0) //default lowest quartile
@@ -384,7 +386,7 @@ public class AuctionHouse : MonoBehaviour
     }
     protected void CountProfits()
     {
-        var com = auctionTracker.book;
+        var com = auctionStats.book;
         //count profit per profession/commodity
         //first get total profit earned this round
         Dictionary<string, float> totalProfits = new Dictionary<string, float>();
@@ -418,7 +420,7 @@ public class AuctionHouse : MonoBehaviour
             {
                 entry.Value.profits.Add(profit);
             }
-            if (auctionTracker.round > 100 && entry.Value.profits.LastAverage(100) < 0)
+            if (auctionStats.round > 100 && entry.Value.profits.LastAverage(100) < 0)
             {
                 //Debug.Log("quitting!! last 10 round average was : " + entry.Value.profits.LastAverage(100));
                 //TODO should be no trades in n rounds
@@ -427,11 +429,12 @@ public class AuctionHouse : MonoBehaviour
             {
                 //Debug.Log("last 10 round average was : " + entry.Value.profits.LastAverage(100));
             }
-            if (float.IsNaN(profit) || profit > 10000)
+
+            if (float.IsNaN(profit))
             {
-                profit = -42; //special case
+                profit = 0; //special case
             }
-            auctionTracker.book[commodity].cashs.Add(profit);
+            auctionStats.book[commodity].cashs.Add(profit);
         }
     }
     protected void QuitIf()
@@ -440,11 +443,11 @@ public class AuctionHouse : MonoBehaviour
         {
             return;
         }
-        foreach (var entry in auctionTracker.book)
+        foreach (var entry in auctionStats.book)
         {
             var commodity = entry.Key;
             var tradeVolume = entry.Value.trades.LastSum(numRoundsNoTrade);
-            if (auctionTracker.round > numRoundsNoTrade && tradeVolume == 0)
+            if (auctionStats.round > numRoundsNoTrade && tradeVolume == 0)
             {
                 //Debug.Log("quitting!! last " + numRoundsNoTrade + " round average " + commodity + " was : " + tradeVolume);
                 timeToQuit = true;
@@ -457,7 +460,6 @@ public class AuctionHouse : MonoBehaviour
         }
     }
 
-    float defaulted = 0;
     protected void EnactBankruptcy()
     {
         foreach (var agent in agents)
@@ -468,7 +470,7 @@ public class AuctionHouse : MonoBehaviour
     }
     protected void CountProfessions()
     {
-        var com = auctionTracker.book;
+        var com = auctionStats.book;
         //count number of agents per professions
         Dictionary<string, int> professions = new Dictionary<string, int>();
         //initialize professions
@@ -486,7 +488,7 @@ public class AuctionHouse : MonoBehaviour
         foreach (var entry in professions)
         {
             //Debug.Log("Profession: " + entry.Key + ": " + entry.Value);
-            auctionTracker.book[entry.Key].professions.Add(entry.Value);
+            auctionStats.book[entry.Key].professions.Add(entry.Value);
         }
     }
 }

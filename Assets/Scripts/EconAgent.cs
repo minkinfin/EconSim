@@ -93,18 +93,18 @@ public class EconAgent : MonoBehaviour
         {
 
             //if (!com.ContainsKey(buildable))
-                //Debug.Log("commodity not recognized: " + buildable);
+            //Debug.Log("commodity not recognized: " + buildable);
 
-                //if (com[buildable].dep == null)
-                    //Debug.Log(buildable + ": null dep!");
+            //if (com[buildable].dep == null)
+            //Debug.Log(buildable + ": null dep!");
 
-                    foreach (var dep in com[buildable].dep)
-                    {
-                        var commodity = dep.Key;
-                        inputs.Add(commodity);
-                        //Debug.Log("::" + commodity);
-                        AddToInventory(commodity, initStock, maxStock, com[commodity].price, com[commodity].production);
-                    }
+            foreach (var dep in com[buildable].dep)
+            {
+                var commodity = dep.Key;
+                inputs.Add(commodity);
+                //Debug.Log("::" + commodity);
+                AddToInventory(commodity, initStock, maxStock, com[commodity].price, com[commodity].production);
+            }
             AddToInventory(buildable, 0, maxStock, com[buildable].price, com[buildable].production);
             //Debug.Log("New " + gameObject.name + " has " + inventory[buildable].Quantity + " " + buildable);
         }
@@ -378,12 +378,10 @@ public class EconAgent : MonoBehaviour
             //get list of dependent commodities
             float numProduced = float.MaxValue; //amt agent can produce for commodity buildable
                                                 //find max that can be made w/ available stock
-            //Assert.IsTrue(com.ContainsKey(buildable));
+                                                //Assert.IsTrue(com.ContainsKey(buildable));
             foreach (var dep in com[buildable].dep)
             {
                 var numNeeded = dep.Value;
-
-                
                 //inventory.Add(dep.Key, new InventoryItem(dep.Key, 0, maxStock, com[dep.Key].price, com[dep.Key].production));
 
                 var numAvail = inventory[dep.Key].Quantity;
