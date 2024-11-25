@@ -17,6 +17,9 @@ public class MultiLineChartManager : MonoBehaviour
 
     public void Init(AuctionStats stats, Dictionary<string, Material> commColors)
     {
+        if (lineGraphRenderers == null)
+            lineGraphRenderers = new Dictionary<string, LineGraphRenderer>();
+
         for (int i = 0; i < stats.book.Count; i++)
         {
             string key = stats.book.ElementAt(i).Key;
@@ -29,7 +32,12 @@ public class MultiLineChartManager : MonoBehaviour
 
     public void DrawGraph(Dictionary<string, List<float>> graphData)
     {
-        float maxHeight = graphData.Values.SelectMany(x => x.Count > maxPlot ? x.Skip(x.Count - maxPlot).ToList() : x).Max();
+        float maxHeight = 1;
+
+        var filteredData = graphData.Values.SelectMany(x => x.Count > maxPlot ? x.Skip(x.Count - maxPlot).ToList() : x);
+        if (filteredData.Count() > 0)
+            maxHeight = filteredData.Max();
+
         for (int i = 0; i < graphData.Count; i++)
         {
             string key = graphData.ElementAt(i).Key;

@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using UnityEngine;
 using AYellowpaper.SerializedCollections;
+using System.Collections;
+using TMPro;
 
 public class AuctionHouse : MonoBehaviour
 {
@@ -13,31 +15,29 @@ public class AuctionHouse : MonoBehaviour
     public int numRoundsNoTrade = 100;
 
     [SerializedDictionary("Comm", "numAgents")]
-    public SerializedDictionary<string, int> numAgents = new()
-    {
-        { "Food", 3 },
-        { "Wood", 3 },
-        { "Ore", 3 },
-        { "Metal", 4 },
-        { "Tool", 4 }
-    };
+    public SerializedDictionary<string, int> numAgents;
 
     protected List<EconAgent> agents = new List<EconAgent>();
     protected float irs;
     protected bool timeToQuit = false;
-    protected OfferTable askTable, bidTable;
+    protected List<Offer> offerTable;
+    protected List<Bid> bidTable;
     protected StreamWriter sw;
     protected AuctionStats auctionStats;
-    protected Dictionary<string, Dictionary<string, float>> trackBids = new();
     protected float lastTick;
+    public int round { get; private set; }
+    private bool autoRun = false;
+    public TextMeshProUGUI roundText;
     void Start()
     {
+        round = 0;
         config = GetComponent<AgentConfig>();
-        OpenFileForWrite();
 
         lastTick = 0;
         auctionStats = AuctionStats.Instance;
         var com = auctionStats.book;
+        offerTable = new List<Offer>();
+        bidTable = new List<Bid>();
 
         irs = 0;
         var prefab = Resources.Load("Agent");
@@ -66,27 +66,26 @@ public class AuctionHouse : MonoBehaviour
                 ++agentIndex;
             }
         }
-        askTable = new OfferTable();
-        bidTable = new OfferTable();
 
         foreach (var entry in com)
         {
-            trackBids.Add(entry.Key, new Dictionary<string, float>());
-            foreach (var item in com)
-            {
-                trackBids[entry.Key].Add(item.Key, 0);
-            }
+            entry.Value.produced.Add(0);
+            entry.Value.trades.Add(0);
+            entry.Value.avgClearingPrice.Add(1);
+            entry.Value.consumed.Add(0);
         }
+        CountStockPileAndCash();
+        CountProfessions();
+        CountProfits();
     }
     void InitAgent(EconAgent agent, string type)
     {
         List<string> buildables = new List<string> { type };
-        float initStock = config.initStock;
+        int initStock = config.initStock;
         float initCash = config.initCash;
         if (config.randomInitStock)
         {
             initStock = UnityEngine.Random.Range(config.initStock / 2, config.initStock * 2);
-            initStock = Mathf.Floor(initStock);
         }
 
         var maxStock = Mathf.Max(initStock, config.maxStock);
@@ -94,50 +93,78 @@ public class AuctionHouse : MonoBehaviour
         agent.Init(config, initCash, buildables, initStock, maxStock);
     }
 
+    public void AutoRun()
+    {
+        autoRun = !autoRun;
+    }
+
     void FixedUpdate()
     {
-        //        if (auctionTracker.round > maxRounds || timeToQuit)
-        //        {
-        //            CloseWriteFile();
-        //#if UNITY_EDITOR
-        //            UnityEditor.EditorApplication.isPlaying = false;
-        //#elif UNITY_WEBPLAYER
-        //        Application.OpenURL("127.0.0.1");
-        //#else
-        //        Application.Quit();
-        //#endif
-        //            return;
-        //        }
-        //wait before update
-        if (Time.time - lastTick > config.tickInterval)
+        if (Time.time - lastTick > config.tickInterval && autoRun)
         {
-            //Debug.Log("v1.4 Round: " + auctionTracker.round);
-            //sampler.BeginSample("AuctionHouseTick");
             Tick();
-            //sampler.EndSample();
             lastTick = Time.time;
-            auctionStats.nextRound();
         }
     }
-    void Tick()
+    public void Tick()
     {
         var com = auctionStats.book;
-        foreach (var agent in agents)
+        var totalProducedThisRound = new Dictionary<string, float>();
+        var totalConsumedThisRound = new Dictionary<string, float>();
+        offerTable = new List<Offer>();
+        bidTable = new List<Bid>();
+        foreach (var entry in com)
         {
-            var numProduced = agent.Produce(com);
+            totalProducedThisRound.Add(entry.Key, 0);
+            totalConsumedThisRound.Add(entry.Key, 0);
+        }
+        agents = agents.Where(x => !x.IsBankrupt).ToList();
+        foreach (EconAgent agent in agents)
+        {
+            (var producedThisRound, var consumedThisRound) = agent.Produce(com);
+
             float idleTax = 0;
-            if (numProduced == 0)
+            if (producedThisRound.Count == 0)
             {
                 idleTax = agent.PayTax(config.idleTaxRate);
                 irs += idleTax;
             }
-            askTable.Add(agent.CreateAsks());
-            bidTable.Add(agent.Consume(com));
+            var offers = agent.CreateOffers();
+            var bids = agent.CreateBids(com);
+            offerTable.AddRange(offers);
+            bidTable.AddRange(bids);
+
+            foreach (var entry in producedThisRound)
+            {
+                totalProducedThisRound[entry.Key] += entry.Value;
+            }
+            foreach (var entry in consumedThisRound)
+            {
+                totalConsumedThisRound[entry.Key] += entry.Value;
+            }
         }
 
         foreach (var entry in com)
         {
             ResolveOffers(entry.Value);
+        }
+
+        foreach (var agent in agents)
+        {
+            var need = agent.Consume();
+            foreach (var entry in need)
+            {
+                totalConsumedThisRound[entry.Key] += entry.Value;
+            }
+        }
+
+        foreach (var entry in com)
+        {
+            var totalProduced = totalProducedThisRound[entry.Key];
+            entry.Value.produced.Add(totalProduced);
+
+            var totalConsumed = totalConsumedThisRound[entry.Key];
+            entry.Value.consumed.Add(totalConsumed);
         }
 
         CountProfits();
@@ -150,100 +177,85 @@ public class AuctionHouse : MonoBehaviour
         }
         EnactBankruptcy();
         QuitIf();
+        round++;
+        roundText.text = round.ToString();
     }
 
-    protected void PrintAuctionStats(string c, float buy, float sell)
-    {
-        string header = auctionStats.round + ", auction, none, " + c + ", ";
-        string msg = header + "bid, " + buy + ", n/a\n";
-        msg += header + "ask, " + sell + ", n/a\n";
-        msg += header + "avgAskPrice, " + auctionStats.book[c].avgAskPrice[^1] + ", n/a\n";
-        msg += header + "avgBidPrice, " + auctionStats.book[c].avgBidPrice[^1] + ", n/a\n";
-        header = auctionStats.round + ", auction, none, none, ";
-        msg += header + "irs, " + irs + ", n/a\n";
-        msg += auctionStats.GetLog();
-
-        PrintToFile(msg);
-    }
     protected void ResolveOffers(Commodity commodity)
     {
-        var asks = askTable[commodity.name];
-        var bids = bidTable[commodity.name];
-        var agentDemandRatio = bids.Count / Mathf.Max(.01f, (float)asks.Count);
+        var offers = offerTable.Where(x => x.CommodityName == commodity.name).ToList();
+        var bids = bidTable.Where(x => x.CommodityName == commodity.name).ToList();
+        var agentDemandRatio = 0;
+        if (offers.Count > 0)
+            agentDemandRatio = bids.Count / offers.Count;
 
-        var quantityToBuy = bids.Sum(item => item.offerQuantity);
-        var quantityToSell = asks.Sum(item => item.offerQuantity);
-        commodity.bids.Add(quantityToBuy);
-        commodity.asks.Add(quantityToSell);
+
+        int totalOfferQuantity = offers.Sum(offer => offer.Quantity);
+        int totalBidQuantity = bids.Sum(bid => bid.Quantity);
+        commodity.offers.Add(totalOfferQuantity);
+        commodity.bids.Add(totalBidQuantity);
+        commodity.sellers.Add(offers.Count);
         commodity.buyers.Add(bids.Count);
-        commodity.sellers.Add(asks.Count);
-        if (quantityToSell == 0)
-        {
-            commodity.avgAskPrice.Add(0);
-        }
-        else
-        {
-            commodity.avgAskPrice.Add(asks.Sum((x) => x.offerPrice * x.offerQuantity) / quantityToSell);
-        }
-        if (quantityToBuy == 0)
-        {
-            commodity.avgBidPrice.Add(0);
-        }
-        else
-        {
-            commodity.avgBidPrice.Add(bids.Sum((x) => x.offerPrice * x.offerQuantity) / quantityToBuy);
-        }
+        commodity.avgOfferPrice.Add(totalOfferQuantity > 0 ? (offers.Sum((x) => x.Price * x.Quantity) / totalOfferQuantity) : 0);
+        commodity.avgBidPrice.Add(totalBidQuantity > 0 ? (bids.Sum((x) => x.Price * x.Quantity) / totalBidQuantity) : 0);
 
-        asks.Shuffle();
-        bids.Shuffle();
-
-        asks.Sort((x, y) => x.offerPrice.CompareTo(y.offerPrice));
+        offers = offers.OrderBy(x => x.Price).ToList();
+        bids = bids.OrderBy(x => new Guid()).ToList();
 
         float moneyExchangedThisRound = 0;
         float goodsExchangedThisRound = 0;
 
-        int askIdx = 0;
-        int bidIdx = 0;
-
-        while (askIdx < asks.Count && bidIdx < bids.Count)
+        int maxLoop = 100;
+        int ii = 0;
+        for (int i = 0; i < offers.Count; i++)
         {
-            var ask = asks[askIdx];
-            var bid = bids[bidIdx];
-
-            var clearingPrice = ask.offerPrice;
-            var tradeQuantity = Mathf.Min(bid.remainingQuantity, ask.remainingQuantity);
-
-
-            var boughtQuantity = bid.agent.Buy(commodity.name, tradeQuantity, clearingPrice);
-            ask.agent.Sell(commodity.name, boughtQuantity, clearingPrice);
-
-            //track who bought what
-            var buyers = trackBids[commodity.name];
-            buyers[bid.agent.outputs[0]] += clearingPrice * boughtQuantity;
-
-            moneyExchangedThisRound += clearingPrice * boughtQuantity;
-            goodsExchangedThisRound += boughtQuantity;
-
-            //this is necessary for price belief updates after the big loop
-            ask.Accepted(clearingPrice, boughtQuantity);
-            bid.Accepted(clearingPrice, boughtQuantity);
-
-            //go to next ask/bid if fullfilled
-            if (ask.remainingQuantity == 0)
+            var offer = offers[i];
+            int bidIdx = 0;
+            while (offer.remainingQuantity > 0 && bidIdx < bids.Count && ii < maxLoop)
             {
-                askIdx++;
-            }
-            if (bid.remainingQuantity == 0)
-            {
-                bidIdx++;
+                if (bidIdx >= bids.Count)
+                {
+                    bidIdx = bidIdx % bids.Count;
+                }
+                var bid = bids[bidIdx];
+
+                if (offer.Price > bid.Price || bid.agent.cash < offer.Price)
+                {
+                    bidIdx++;
+                    continue;
+                }
+                var acceptedPrice = (offer.Price + bid.Price) / 2;
+                if(config.buyerBuysOfferPrice)
+                {
+                    acceptedPrice = offer.Price;
+                }
+
+                int tradeQuantity = Math.Min(bid.remainingQuantity, offers[i].remainingQuantity);
+
+                int boughtQuantity = bid.agent.Buy(commodity.name, tradeQuantity, acceptedPrice);
+                offer.agent.Sell(commodity.name, boughtQuantity, acceptedPrice);
+
+                moneyExchangedThisRound += acceptedPrice * boughtQuantity;
+                goodsExchangedThisRound += boughtQuantity;
+
+                //this is necessary for price belief updates after the big loop
+                offer.Accepted(acceptedPrice, boughtQuantity);
+                bid.Accepted(acceptedPrice, boughtQuantity);
+
+                //go to next offer/bid if fullfilled
+                if (bid.remainingQuantity == 0)
+                {
+                    bidIdx++;
+                }
+                ii++;
             }
         }
 
         float averagePrice = 0;
-        if (goodsExchangedThisRound == 0 && commodity.trades.Count > 0)
-        {
-            goodsExchangedThisRound = commodity.trades.Last();
-        }
+        //if (goodsExchangedThisRound == 0 && commodity.trades.Count > 0)
+        //{
+        //    goodsExchangedThisRound = commodity.trades.Last();
+        //}
 
         if (moneyExchangedThisRound == 0 && commodity.avgClearingPrice.Count > 0)
         {
@@ -256,24 +268,39 @@ public class AuctionHouse : MonoBehaviour
         commodity.trades.Add(goodsExchangedThisRound);
         commodity.Update(averagePrice, agentDemandRatio);
 
-        //var excessDemand = asks.Sum(ask => ask.quantity);
+        //var excessDemand = offers.Sum(offer => offer.quantity);
         //var excessSupply = bids.Sum(bid => bid.quantity);
         //var demand = (goodsExchanged + excessDemand) 
         //					 / (goodsExchanged + excessSupply);
 
-        foreach (var ask in asks)
+
+        foreach (var offer in offers)
         {
-            ask.agent.UpdateSellerPriceBelief(in ask, in commodity);
+            offer.agent.UpdateSellerPriceBelief(in offer, in commodity);
         }
-        asks.Clear();
+        offers.Clear();
         foreach (var bid in bids)
         {
             bid.agent.UpdateBuyerPriceBelief(in bid, in commodity);
         }
         bids.Clear();
+
+        //var offerAgents = offers.GroupBy(x => x.agent.name).Select(x => (x.Select(y => y.agent).First(), x.ToList())).ToList();
+        //foreach (var offerAgent in offerAgents)
+        //{
+        //    offerAgent.Item1.UpdateSellerPriceBelief(offerAgent.Item2, in commodity);
+        //}
+        //offers.Clear();
+
+        //var bidAgents = bids.GroupBy(x => x.agent.name).Select(x => (x.Select(y => y.agent).First(), x.ToList())).ToList();
+        //foreach (var bidAgent in bidAgents)
+        //{
+        //    bidAgent.Item1.UpdateSellerPriceBelief(bidAgent.Item2, in commodity);
+        //}
+        //bids.Clear();
     }
 
-    protected void Trade(string commodity, float clearingPrice, float quantity, EconAgent bidder, EconAgent seller)
+    protected void Trade(string commodity, float clearingPrice, int quantity, EconAgent bidder, EconAgent seller)
     {
         //transfer commodity
         //transfer cash
@@ -283,106 +310,33 @@ public class AuctionHouse : MonoBehaviour
 
     }
 
-    protected void OpenFileForWrite()
-    {
-        if (!config.enableWriteFile)
-            return;
-
-        var datepostfix = DateTime.Now.ToString(@"yyyy-MM-dd-h_mm_tt");
-        if (config.appendTimeToLog)
-        {
-            sw = new StreamWriter("log_" + datepostfix + ".csv");
-        }
-        else
-        {
-            sw = new StreamWriter("log.csv");
-        }
-        string header_row = "round, agent, produces, inventory_items, type, amount, reason\n";
-        PrintToFile(header_row);
-    }
-    protected void PrintToFile(string msg)
-    {
-        if (!config.enableWriteFile)
-            return;
-        sw.Write(msg);
-    }
-
-    protected void CloseWriteFile()
-    {
-        if (!config.enableWriteFile)
-            return;
-        sw.Close();
-    }
-
-    protected void AgentsStats()
-    {
-        string header = auctionStats.round + ", ";
-        string msg = "";
-        foreach (var agent in agents)
-        {
-            msg += agent.Stats(header);
-        }
-        PrintToFile(msg);
-    }
     protected void CountStockPileAndCash()
     {
         Dictionary<string, float> stockPile = new Dictionary<string, float>();
-        Dictionary<string, List<float>> stockList = new Dictionary<string, List<float>>();
         Dictionary<string, List<float>> cashList = new Dictionary<string, List<float>>();
         var com = auctionStats.book;
         float totalCash = 0;
         foreach (var entry in com)
         {
-            stockPile.Add(entry.Key, 100);
-            stockList.Add(entry.Key, new List<float>());
+            stockPile.Add(entry.Key, 0);
             cashList.Add(entry.Key, new List<float>());
         }
         foreach (var agent in agents)
         {
             //count stocks in all stocks of agent
-            foreach (var c in agent.inventory)
+            foreach (var c in agent.Inventory)
             {
                 stockPile[c.Key] += c.Value.Surplus();
-                var surplus = c.Value.Surplus();
-                if (surplus > 20)
-                {
-                    //Debug.Log(agent.name + " has " + surplus + " " + c.Key);
-                }
-                stockList[c.Key].Add(surplus);
             }
             cashList[agent.outputs[0]].Add(agent.cash);
             totalCash += agent.cash;
         }
-        foreach (var stock in stockPile)
-        {
-            int bucket = 1, index = 0;
-            var avg = GetQuantile(stockList[stock.Key], bucket, index);
-            auctionStats.book[stock.Key].stocks.Add(avg);
-            auctionStats.book[stock.Key].capitals.Add(cashList[stock.Key].Sum());
-        }
-    }
-    protected float GetQuantile(List<float> list, int buckets = 4, int index = 0) //default lowest quartile
-    {
-        float avg = 0;
-        if (buckets == 1)
-        {
-            if (list.Count > 0)
-                return list.Average();
-            else
-                return 0;
-        }
 
-        var numPerQuantile = list.Count / buckets;
-        var numQuantiles = buckets;
-        var begin = Mathf.Max(0, index * numPerQuantile);
-        var end = Mathf.Min(list.Count - 1, begin + numPerQuantile);
-        if (list.Count != 0 && end > 0)
+        foreach (var entry in com)
         {
-            list.Sort();
-            var newList = list.GetRange(begin, end);
-            avg = newList.Average();
+            auctionStats.book[entry.Key].stocks.Add(stockPile[entry.Key]);
+            auctionStats.book[entry.Key].capitals.Add(cashList[entry.Key].Sum());
         }
-        return avg;
     }
     protected void CountProfits()
     {
@@ -420,7 +374,7 @@ public class AuctionHouse : MonoBehaviour
             {
                 entry.Value.profits.Add(profit);
             }
-            if (auctionStats.round > 100 && entry.Value.profits.LastAverage(100) < 0)
+            if (round > 100 && entry.Value.profits.LastAverage(100) < 0)
             {
                 //Debug.Log("quitting!! last 10 round average was : " + entry.Value.profits.LastAverage(100));
                 //TODO should be no trades in n rounds
@@ -447,7 +401,7 @@ public class AuctionHouse : MonoBehaviour
         {
             var commodity = entry.Key;
             var tradeVolume = entry.Value.trades.LastSum(numRoundsNoTrade);
-            if (auctionStats.round > numRoundsNoTrade && tradeVolume == 0)
+            if (round > numRoundsNoTrade && tradeVolume == 0)
             {
                 //Debug.Log("quitting!! last " + numRoundsNoTrade + " round average " + commodity + " was : " + tradeVolume);
                 timeToQuit = true;

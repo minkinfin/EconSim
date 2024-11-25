@@ -5,11 +5,11 @@ using UnityEngine;
 using System.Linq;
 using System;
 
-public class Dependency : Dictionary<string, float> { }
+public class Dependency : Dictionary<string, int> { }
 public class Commodity
 {
     const float defaultPrice = 1;
-    public ESList buyers, sellers, bids, asks, avgBidPrice, avgAskPrice, avgClearingPrice, trades, profits, professions, stocks, cashs, capitals;
+    public ESList buyers, sellers, bids, offers, avgBidPrice, avgOfferPrice, avgClearingPrice, trades, profits, professions, stocks, cashs, capitals, produced, consumed;
 
     float avgPrice = 1;
     public float GetAvgPrice(int history) //average of last history size
@@ -18,27 +18,29 @@ public class Commodity
         avgPrice = avgClearingPrice.Skip(skip).Average();
         return avgPrice;
     }
-    public Commodity(string n, float p, Dependency d)
+    public Commodity(string n, int p, Dependency d)
     {
         name = n;
-        production = p;
+        ProductionRate = p;
         price = defaultPrice;
         dep = d;
         demand = 1;
 
-        buyers = new ESList { 1 };
-        sellers = new ESList { 1 };
-        bids = new ESList { 1 };
-        asks = new ESList { 1 };
-        trades = new ESList { 1 };
-        avgAskPrice = new ESList { 1 };
-        avgBidPrice = new ESList { 1 };
-        avgClearingPrice = new ESList { 1 };
-        profits = new ESList { 1 };
-        professions = new ESList { 1 };
-        stocks = new ESList { 1 };
-        cashs = new ESList { 1 };
-        capitals = new ESList { 1 };
+        buyers = new ESList();
+        sellers = new ESList();
+        bids = new ESList();
+        offers = new ESList();
+        trades = new ESList();
+        avgOfferPrice = new ESList();
+        avgBidPrice = new ESList();
+        avgClearingPrice = new ESList();
+        profits = new ESList();
+        professions = new ESList();
+        stocks = new ESList();
+        cashs = new ESList();
+        capitals = new ESList();
+        produced = new ESList();
+        consumed = new ESList();
     }
     public void Update(float p, float dem)
     {
@@ -48,6 +50,6 @@ public class Commodity
     public string name { get; private set; }
     public float price { get; private set; } //market price
     public float demand { get; private set; }
-    public float production { get; private set; }
+    public int ProductionRate { get; private set; }
     public Dependency dep { get; private set; }
 }

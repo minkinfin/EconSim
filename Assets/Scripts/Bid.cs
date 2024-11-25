@@ -5,7 +5,7 @@ using UnityEngine;
 using System.Linq;
 using System;
 
-public class Offer
+public class Bid
 {
     public string CommodityName { get; private set; }
     public float Price { get; private set; }
@@ -15,16 +15,16 @@ public class Offer
     float AcceptPriceVolume; // total price of traded goods; sum of price of each good traded over multiple trades
     public int remainingQuantity { get; private set; }
     public EconAgent agent { get; private set; }
-    public Offer(string commodityName, float p, int q, EconAgent a)
-    {
-        CommodityName = commodityName;
-        Price = p;
-        remainingQuantity = q;
-        Quantity = q;
-        agent = a;
-    }
-    public void Accepted(float p, int q)
-    {
+    public Bid(string commodityName, float p, int q, EconAgent a)
+	{
+		CommodityName = commodityName;
+		Price = p;
+		remainingQuantity = q;
+		Quantity = q;
+		agent = a;
+	}
+	public void Accepted(float p, int q)
+	{
         IsMatched = true;
         remainingQuantity -= q;
         AcceptPriceVolume += p * q;

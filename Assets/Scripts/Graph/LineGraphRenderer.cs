@@ -23,7 +23,7 @@ public class LineGraphRenderer : Graphic
     {
         if (label != null && points.Count > 0)
         {
-        float pointValue = points[points.Count - 1];
+            float pointValue = points[points.Count - 1];
             if (pointValue % 1 == 0)
             {
                 label.SetText(((int)pointValue).ToString());
@@ -39,14 +39,23 @@ public class LineGraphRenderer : Graphic
     {
         vh.Clear();
 
-        if (points.Count < 2 || points.Max() <= 0)
+        if (points.Count == 0)
             return;
+        if (points.Count == 1){
+            points.Add(points[0]);
+        }
+
+        //if (points.All(x => x == 0))
+        //{
+        //    points[points.Count - 1] = 0.1f;
+        //}
 
         width = rectTransform.rect.width;
         height = rectTransform.rect.height;
 
         unitWidth = width / maxPlot;
-        unitHeight = height / maxHeight;
+        if (maxHeight != 0)
+            unitHeight = height / maxHeight;
 
 
         for (int i = 0; i < points.Count - 1; i++)

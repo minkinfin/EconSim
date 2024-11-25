@@ -10,12 +10,14 @@ public class GraphController : MonoBehaviour
     private LineGraphRenderer lineGraphRenderer;
     public AuctionStats AuctionStats;
 
-    public MultiLineChartManager avgPriceGraph;
+    public MultiLineChartManager unitsProducedGraph;
     public MultiLineChartManager unitsExchangedGraph;
-    public MultiLineChartManager professionsGraph;
     public MultiLineChartManager stockPileGraph;
-    public MultiLineChartManager cashGraph;
-    public MultiLineChartManager totalCapitalGraph;
+    public MultiLineChartManager professionsGraph;
+    public MultiLineChartManager avgPriceGraph;
+    public MultiLineChartManager resouceConsumtionGraph;
+    //public MultiLineChartManager cashGraph;
+    //public MultiLineChartManager totalCapitalGraph;
 
     float tickInterval = .05f;
     float tick = 0;
@@ -27,29 +29,38 @@ public class GraphController : MonoBehaviour
 
     private void Start()
     {
-        avgPriceGraph.Init(AuctionStats, commColor);
+        unitsProducedGraph.Init(AuctionStats, commColor);
         unitsExchangedGraph.Init(AuctionStats, commColor);
-        professionsGraph.Init(AuctionStats, commColor);
         stockPileGraph.Init(AuctionStats, commColor);
-        cashGraph.Init(AuctionStats, commColor);
-        totalCapitalGraph.Init(AuctionStats, commColor);
+        professionsGraph.Init(AuctionStats, commColor);
+        avgPriceGraph.Init(AuctionStats, commColor);
+        resouceConsumtionGraph.Init(AuctionStats, commColor);
+        //cashGraph.Init(AuctionStats, commColor);
+        //totalCapitalGraph.Init(AuctionStats, commColor);
     }
 
     private void FixedUpdate()
     {
         if (tick > tickInterval)
         {
-            var book = AuctionStats.book;
-            avgPriceGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.avgClearingPrice.ToList()));
-            unitsExchangedGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.trades.ToList()));
-            professionsGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.professions.ToList()));
-            stockPileGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.stocks.ToList()));
-            cashGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.cashs.ToList()));
-            totalCapitalGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.capitals.ToList()));
-
+            Tick();
             tick = 0;
         }
 
         tick += Time.deltaTime;
+    }
+
+    public void Tick()
+    {
+        var book = AuctionStats.book;
+        unitsProducedGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.produced.ToList()));
+        unitsExchangedGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.trades.ToList()));
+        stockPileGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.stocks.ToList()));
+        professionsGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.professions.ToList()));
+        avgPriceGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.avgClearingPrice.ToList()));
+        resouceConsumtionGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.consumed.ToList()));
+        //cashGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.cashs.ToList()));
+        //totalCapitalGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.capitals.ToList()));
+
     }
 }

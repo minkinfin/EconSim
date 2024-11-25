@@ -9,17 +9,6 @@ using System.Net.WebSockets;
 
 public class Utilities : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
-    {
-        
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
     public static void TransferQuantity(float quantity, EconAgent from, EconAgent to)
     {
         from.modify_cash(-quantity);
@@ -30,7 +19,6 @@ public class Utilities : MonoBehaviour
 public class ESList : List<float>
 {
     float avg;
-    int lastRound = 0;
     AuctionStats comInstance;
     int maxLength = 100;
     public ESList()
@@ -40,7 +28,6 @@ public class ESList : List<float>
     new public void Add(float num)
     {
         base.Add(num);
-        lastRound = comInstance.round;
         if(base.Count > maxLength)
         {
             base.RemoveAt(0);

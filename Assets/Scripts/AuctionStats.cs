@@ -17,10 +17,9 @@ public class AuctionStats : MonoBehaviour
     public static AuctionStats Instance { get; private set; }
 
     public Dictionary<string, Commodity> book { get; private set; }
-    public int round { get; private set; }
 
     [SerializedDictionary("ID", "Dependency")]
-    public SerializedDictionary<string, SerializedKeyValuePair<float, SerializedDictionary<string, float>>> recipes;
+    public SerializedDictionary<string, SerializedKeyValuePair<int, SerializedDictionary<string, int>>> recipes;
     string log_msg = "";
     public string GetLog()
     {
@@ -29,15 +28,10 @@ public class AuctionStats : MonoBehaviour
         return ret;
     }
 
-    public void nextRound()
-    {
-        round += 1;
-    }
     private void Awake()
     {
         Instance = this;
         book = new Dictionary<string, Commodity>(); //names, market price
-        round = 0;
         Init();
     }
 
@@ -69,27 +63,21 @@ public class AuctionStats : MonoBehaviour
         }
         return prof;
     }
-    //get price of good
-    int gotHottestGoodRound = 0;
     string mostDemand = "invalid";
     public string GetHottestGood()
     {
-        if (round != gotHottestGoodRound)
+        switch (config.changeProductionMode)
         {
-            switch (config.changeProductionMode)
-            {
-                case ChangeProductionMode.HighestBidPrice:
-                    mostDemand = GetHottestGoodByHighestBidPrice();
-                    break;
-                case ChangeProductionMode.ProbabilisticHottestGood:
-                    mostDemand = GetHottestGoodByProbabilisticHottestGood();
-                    break;
-                case ChangeProductionMode.Random:
-                    mostDemand = GetHottestGoodByRandom();
-                    break;
-            }
-            gotHottestGoodRound = round;
+            case ChangeProductionMode.HighestBidPrice:
+                mostDemand = GetHottestGoodByHighestBidPrice();
+                break;
+            case ChangeProductionMode.ProbabilisticHottestGood:
+                mostDemand = GetHottestGoodByProbabilisticHottestGood();
+                break;
         }
+
+        if (mostDemand == "invalid")
+            mostDemand = GetHottestGoodByRandom();
 
         return mostDemand;
     }
@@ -106,7 +94,7 @@ public class AuctionStats : MonoBehaviour
                 mostDemand = c.Key;
             }
         }
-        log_msg += round + ", auction, " + mostDemand + ", none, mostBid, " + mostBid + ", n/a\n";
+        //log_msg += round + ", auction, " + mostDemand + ", none, mostBid, " + mostBid + ", n/a\n";
 
         return mostDemand;
     }
@@ -116,10 +104,10 @@ public class AuctionStats : MonoBehaviour
 
         foreach (var c in book)
         {
-            var asks = c.Value.asks.LastAverage(config.historySize);
+            var offers = c.Value.offers.LastAverage(config.historySize);
             var bids = c.Value.bids.LastAverage(config.historySize);
-            asks = Mathf.Max(.5f, asks);
-            var ratio = bids / asks;
+            offers = Mathf.Max(.5f, offers);
+            var ratio = bids / offers;
 
             if (best_ratio < ratio)
             {
@@ -127,7 +115,7 @@ public class AuctionStats : MonoBehaviour
                 mostDemand = c.Key;
             }
         }
-        log_msg += round + ", auction, " + mostDemand + ", none, demandsupplyratio, " + Mathf.Sqrt(best_ratio) + ", n/a\n";
+        //log_msg += round + ", auction, " + mostDemand + ", none, demandsupplyratio, " + Mathf.Sqrt(best_ratio) + ", n/a\n";
         return mostDemand;
     }
     string GetHottestGoodByRandom()
@@ -139,10 +127,10 @@ public class AuctionStats : MonoBehaviour
             picker.AddItem(c.Key, 1);//Mathf.Sqrt(ratio)); //less likely a profession dies out
         }
         var itemWeight = picker.PickRandom();
-        log_msg += round + ", auction, " + mostDemand + ", none, random, " + itemWeight.Item2 + ", n/a\n";
+        //log_msg += round + ", auction, " + mostDemand + ", none, random, " + itemWeight.Item2 + ", n/a\n";
         return mostDemand;
     }
-    bool Add(string name, float production, Dependency dep)
+    bool Add(string name, int production, Dependency dep)
     {
         if (book.ContainsKey(name)) { return false; }
         Assert.IsNotNull(dep);
@@ -172,7 +160,7 @@ public class AuctionStats : MonoBehaviour
         foreach (var item in recipes)
         {
             Dependency dep = new Dependency();
-            float prod_rate = item.Value.Key;
+            int prod_rate = item.Value.Key;
             foreach (var field in item.Value.Value)
             {
                 dep.Add(field.Key, field.Value);
