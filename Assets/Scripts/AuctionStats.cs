@@ -1,175 +1,113 @@
-using System.Collections;
 using System.Collections.Generic;
-using UnityEngine.Assertions;
 using UnityEngine;
 using System.Linq;
-using System;
-
-using AYellowpaper.SerializedCollections;
-using System.Security.Cryptography.X509Certificates;
-using System.Net.WebSockets;
-using UnityEditor.Sprites;
-//using Dependency = System.Collections.Generic.Dictionary<string, float>;
 
 public class AuctionStats : MonoBehaviour
 {
-    AgentConfig config;
-    public static AuctionStats Instance { get; private set; }
+    private Dictionary<string, List<AuctionRecord>> auctionRecords;
+    protected AgentConfig config;
 
-    public Dictionary<string, Commodity> book { get; private set; }
-
-    [SerializedDictionary("ID", "Dependency")]
-    public SerializedDictionary<string, SerializedKeyValuePair<int, SerializedDictionary<string, int>>> recipes;
-    string log_msg = "";
-    public string GetLog()
+    public void Awake()
     {
-        var ret = log_msg;
-        log_msg = "";
-        return ret;
+        auctionRecords = new Dictionary<string, List<AuctionRecord>>();
     }
-
-    private void Awake()
-    {
-        Instance = this;
-        book = new Dictionary<string, Commodity>(); //names, market price
-        Init();
-    }
-
-    private void Start()
+    public void Start()
     {
         config = GetComponent<AgentConfig>();
     }
 
-    public string GetMostProfitableProfession(String exclude_key)
+    public void AddRecord(Dictionary<string, AuctionRecord> record)
     {
-        string prof = "invalid";
-        float most = 0;
-
-        foreach (var entry in book)
+        foreach (var item in record)
         {
-            var commodity = entry.Key;
-            if (exclude_key == commodity)
-            {
-                continue;
-            }
-            var profitHistory = entry.Value.profits;
-            //WARNING this history refers to the last # agents' profits, not last # rounds... short history if popular profession...
-            var profit = profitHistory.LastAverage(config.historySize);
-            if (profit > most)
-            {
-                prof = commodity;
-                most = profit;
-            }
-        }
-        return prof;
-    }
-    string mostDemand = "invalid";
-    public string GetHottestGood()
-    {
-        switch (config.changeProductionMode)
-        {
-            case ChangeProductionMode.HighestBidPrice:
-                mostDemand = GetHottestGoodByHighestBidPrice();
-                break;
-            case ChangeProductionMode.ProbabilisticHottestGood:
-                mostDemand = GetHottestGoodByProbabilisticHottestGood();
-                break;
-        }
+            if (!auctionRecords.ContainsKey(item.Key))
+                auctionRecords.Add(item.Key, new List<AuctionRecord>());
 
-        if (mostDemand == "invalid")
-            mostDemand = GetHottestGoodByRandom();
-
-        return mostDemand;
-    }
-    string GetHottestGoodByHighestBidPrice()
-    {
-        mostDemand = "invalid";
-        float mostBid = 0;
-        foreach (var c in book)
-        {
-            var bid = c.Value.avgBidPrice.LastAverage(config.historySize);
-            if (bid > mostBid)
-            {
-                mostBid = bid;
-                mostDemand = c.Key;
-            }
-        }
-        //log_msg += round + ", auction, " + mostDemand + ", none, mostBid, " + mostBid + ", n/a\n";
-
-        return mostDemand;
-    }
-    string GetHottestGoodByProbabilisticHottestGood()
-    {
-        float best_ratio = 1.5f;
-
-        foreach (var c in book)
-        {
-            var offers = c.Value.offers.LastAverage(config.historySize);
-            var bids = c.Value.bids.LastAverage(config.historySize);
-            offers = Mathf.Max(.5f, offers);
-            var ratio = bids / offers;
-
-            if (best_ratio < ratio)
-            {
-                best_ratio = ratio;
-                mostDemand = c.Key;
-            }
-        }
-        //log_msg += round + ", auction, " + mostDemand + ", none, demandsupplyratio, " + Mathf.Sqrt(best_ratio) + ", n/a\n";
-        return mostDemand;
-    }
-    string GetHottestGoodByRandom()
-    {
-        var picker = new WeightedRandomPicker<string>();
-        picker.Clear();
-        foreach (var c in book)
-        {
-            picker.AddItem(c.Key, 1);//Mathf.Sqrt(ratio)); //less likely a profession dies out
-        }
-        var itemWeight = picker.PickRandom();
-        //log_msg += round + ", auction, " + mostDemand + ", none, random, " + itemWeight.Item2 + ", n/a\n";
-        return mostDemand;
-    }
-    bool Add(string name, int production, Dependency dep)
-    {
-        if (book.ContainsKey(name)) { return false; }
-        Assert.IsNotNull(dep);
-
-        book.Add(name, new Commodity(name, production, dep));
-        return true;
-    }
-    void PrintStat()
-    {
-        foreach (var item in book)
-        {
-            //Debug.Log(item.Key + ": " + item.Value.price);
-            if (item.Value.dep != null)
-            {
-                //Debug.Log("Dependencies: " );
-                foreach (var depItem in item.Value.dep)
-                {
-                    //Debug.Log(" -> " + depItem.Key + ": " + depItem.Value);
-                }
-            }
+            auctionRecords[item.Key].Add(item.Value);
         }
     }
-    // Use this for initialization
-    void Init()
+
+    internal float GetAvgClearingPrice(string itemNamem, int v)
     {
-        //Debug.Log("Initializing commodities");
-        foreach (var item in recipes)
+        if (!auctionRecords.ContainsKey(itemNamem) || auctionRecords[itemNamem].Count == 0)
+            return 0;
+
+        return auctionRecords[itemNamem].Skip(Mathf.Max(0, auctionRecords[itemNamem].Count - v)).Average(x => x.AvgClearingPrice);
+    }
+
+    internal float GetLastClearingPrice(string itemName)
+    {
+        if (!auctionRecords.ContainsKey(itemName) || auctionRecords[itemName].Count == 0)
+            return 0;
+
+        return auctionRecords[itemName].Last().AvgClearingPrice;
+    }
+
+    internal int GetLastTradeQuantity(string name)
+    {
+        if (!auctionRecords.ContainsKey(name) || auctionRecords[name].Count == 0)
+            return 0;
+
+        return auctionRecords[name].Last().Trades;
+    }
+
+    internal Dictionary<string, List<float>> GetProducedData()
+    {
+        var data = new Dictionary<string, List<float>>();
+        foreach (var item in auctionRecords)
         {
-            Dependency dep = new Dependency();
-            int prod_rate = item.Value.Key;
-            foreach (var field in item.Value.Value)
-            {
-                dep.Add(field.Key, field.Value);
-            }
-            if (!Add(item.Key, prod_rate, dep))
-            {
-                Debug.LogError("Failed to add commodity; duplicate?");
-            }
+            data.Add(item.Key, item.Value.Select(x => (float)x.Produced).ToList());
         }
-        //PrintStat();
+        return data;
+    }
+
+    internal Dictionary<string, List<float>> GetTradesData()
+    {
+        var data = new Dictionary<string, List<float>>();
+        foreach (var item in auctionRecords)
+        {
+            data.Add(item.Key, item.Value.Select(x => (float)x.Trades).ToList());
+        }
+        return data;
+    }
+
+    internal Dictionary<string, List<float>> GetStocksData()
+    {
+        var data = new Dictionary<string, List<float>>();
+        foreach (var item in auctionRecords)
+        {
+            data.Add(item.Key, item.Value.Select(x => x.Stocks).ToList());
+        }
+        return data;
+    }
+
+    internal Dictionary<string, List<float>> GetProfessionData()
+    {
+        var data = new Dictionary<string, List<float>>();
+        foreach (var item in auctionRecords)
+        {
+            data.Add(item.Key, item.Value.Select(x => (float)x.Professions).ToList());
+        }
+        return data;
+    }
+
+    internal Dictionary<string, List<float>> GetAvgClearingPriceData()
+    {
+        var data = new Dictionary<string, List<float>>();
+        foreach (var item in auctionRecords)
+        {
+            data.Add(item.Key, item.Value.Select(x => x.AvgClearingPrice).ToList());
+        }
+        return data;
+    }
+
+    internal Dictionary<string, List<float>> GetConsumedData()
+    {
+        var data = new Dictionary<string, List<float>>();
+        foreach (var item in auctionRecords)
+        {
+            data.Add(item.Key, item.Value.Select(x => (float)x.Consumed).ToList());
+        }
+        return data;
     }
 }

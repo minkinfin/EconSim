@@ -26,6 +26,7 @@ public class GraphController : MonoBehaviour
     public SerializedDictionary<string, Material> commColor;
 
     private Dictionary<string, List<GraphMe>> graphs;
+    protected AgentConfig config;
 
     private void Start()
     {
@@ -52,13 +53,13 @@ public class GraphController : MonoBehaviour
 
     public void Tick()
     {
-        var book = AuctionStats.book;
-        unitsProducedGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.produced.ToList()));
-        unitsExchangedGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.trades.ToList()));
-        stockPileGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.stocks.ToList()));
-        professionsGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.professions.ToList()));
-        avgPriceGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.avgClearingPrice.ToList()));
-        resouceConsumtionGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.consumed.ToList()));
+        var AuctionStats = FindFirstObjectByType<AuctionStats>();
+        unitsProducedGraph.DrawGraph(AuctionStats.GetProducedData());
+        unitsExchangedGraph.DrawGraph(AuctionStats.GetTradesData());
+        stockPileGraph.DrawGraph(AuctionStats.GetStocksData());
+        professionsGraph.DrawGraph(AuctionStats.GetProfessionData());
+        avgPriceGraph.DrawGraph(AuctionStats.GetAvgClearingPriceData());
+        resouceConsumtionGraph.DrawGraph(AuctionStats.GetConsumedData());
         //cashGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.cashs.ToList()));
         //totalCapitalGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.capitals.ToList()));
 

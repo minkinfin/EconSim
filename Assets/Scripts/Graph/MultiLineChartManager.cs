@@ -9,8 +9,12 @@ public class MultiLineChartManager : MonoBehaviour
     Dictionary<string, LineGraphRenderer> lineGraphRenderers;
     public int maxPlot = 50;
     public TextMeshProUGUI title;
+    protected AgentConfig config;
+    private Dictionary<string, Commodity2> book => config.book;
+
     void Awake()
     {
+        config = FindFirstObjectByType<AgentConfig>();
         lineGraphRenderers = new Dictionary<string, LineGraphRenderer>();
         title.SetText(name);
     }
@@ -20,9 +24,9 @@ public class MultiLineChartManager : MonoBehaviour
         if (lineGraphRenderers == null)
             lineGraphRenderers = new Dictionary<string, LineGraphRenderer>();
 
-        for (int i = 0; i < stats.book.Count; i++)
+        for (int i = 0; i < book.Count; i++)
         {
-            string key = stats.book.ElementAt(i).Key;
+            string key = book.ElementAt(i).Key;
             var lineGraphRenderer = transform.Find("Line" + i).GetComponent<LineGraphRenderer>();
             lineGraphRenderer.color = commColors[key].color;
             lineGraphRenderer.maxPlot = maxPlot;

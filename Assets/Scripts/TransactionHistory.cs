@@ -14,7 +14,6 @@ public class TransactionHistory : List<Transaction>
     float max = 0;
     float avg = 0;
     public int history_size = 10;
-    ESList prices = new ESList();
     public float Min() { return min; }
 	public float Max() { return max; }
     public new void Add(Transaction t)

@@ -1,11 +1,9 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Assertions;
 using System.Linq;
-using UnityEngine.XR;
 using System;
 using AYellowpaper.SerializedCollections;
+using UnityEditor.Build.Reporting;
 
 public class EconAgent : MonoBehaviour
 {
@@ -15,12 +13,10 @@ public class EconAgent : MonoBehaviour
     public float cash;
     public int starvationDay;
     float initCash = 100f;
-    int initStock = 1;
     float prevCash = 0;
-    int maxStock = 1;
-    ESList profits = new ESList();
     [SerializedDictionary("Name", "Item")]
-    public SerializedDictionary<string, InventoryItem> Inventory;
+    public SerializedDictionary<string, TradeStats> TradeStats;
+    public Inventory Inventory;
     Dictionary<string, float> perItemCost = new Dictionary<string, float>(); //commodities stockpiled
     float taxesPaidThisRound = 0;
 
@@ -35,58 +31,43 @@ public class EconAgent : MonoBehaviour
 
     //from the paper (base implementation)
     // Use this for initialization
-    Dictionary<string, Commodity> Commodities { get; set; }
     public bool IsBankrupt { get; set; }
-    private Dictionary<string, bool> soldLastRound;
-    float profitMarkup, lossMarkup;
+    private Dictionary<string, Commodity2> book => config.book;
 
     void Awake()
     {
-        Inventory = new SerializedDictionary<string, InventoryItem>();
-        soldLastRound = new Dictionary<string, bool>();
+        TradeStats = new SerializedDictionary<string, TradeStats>();
     }
 
-    public void Init(AgentConfig cfg, float _initCash, List<string> b, int _initStock, int maxstock)
+    public void Init(AgentConfig cfg, float _initCash, List<string> b)
     {
         config = cfg;
+        Inventory = new Inventory(book);
+        config = cfg;
         uid = uid_idx++;
-        initStock = _initStock;
         initCash = _initCash;
-        maxStock = maxstock;
 
-        Commodities = AuctionStats.Instance.book;
         //list of commodities self can produce
         //get initial stockpiles
         outputs = b;
         cash = initCash;
         prevCash = cash;
         inputs.Clear();
-        foreach (var com in Commodities)
+        foreach (var com in book)
         {
-            float priceFromDep = Commodities[com.Key].price;
-            foreach (var dep in Commodities[com.Key].dep)
+            float costFromDep = 1;
+            foreach (var dep in book[com.Key].recipes)
             {
-                priceFromDep += dep.Value * Commodities[dep.Key].price;
+                costFromDep += dep.Value;
                 if (outputs.Contains(com.Key))
                     inputs.Add(dep.Key);
-
             }
-            priceFromDep = priceFromDep / Math.Max(Commodities[com.Key].ProductionRate - 1, 1);
-            AddToInventory(com.Key, 0, maxStock, priceFromDep, Commodities[com.Key].ProductionRate);
-            soldLastRound.Add(com.Key, false);
+            costFromDep = costFromDep / Math.Max(book[com.Key].productionRate - 1, 1);
+            Inventory.AddItem(com.Key, costFromDep, 0);
+
+            TradeStats.Add(com.Key, new TradeStats(com.Key, costFromDep));
         }
         IsBankrupt = false;
-        profitMarkup = config.profitMarkup;
-        lossMarkup = config.profitMarkup;
-    }
-    void AddToInventory(string name, int num, int max, float price, int production)
-    {
-        if (Inventory.ContainsKey(name))
-            return;
-
-        Inventory.Add(name, new InventoryItem(name, num, max, price, production));
-
-        perItemCost[name] = Commodities[name].price * num;
     }
     public float PayTax(float taxRate)
     {
@@ -95,78 +76,38 @@ public class EconAgent : MonoBehaviour
         taxesPaidThisRound = idleTax;
         return idleTax;
     }
-    //public void Reinit(float initCash, List<string> b)
+
+    //public float TaxProfit(float taxRate)
     //{
-    //    if (Commodities == null)
-    //        Commodities = AuctionStats.Instance.book;
-    //    //list of commodities self can produce
-    //    //get initial stockpiles
-    //    outputs = b;
-    //    cash = initCash;
-    //    prevCash = cash;
-    //    inputs.Clear();
-    //    foreach (var buildable in outputs)
-    //    {
-
-    //        //if (!com.ContainsKey(buildable))
-    //        //Debug.Log("commodity not recognized: " + buildable);
-
-    //        //if (com[buildable].dep == null)
-    //        //Debug.Log(buildable + ": null dep!");
-
-    //        string msg = "";
-    //        foreach (var entry in Inventory)
-    //        {
-    //            msg += entry.Value.Quantity + " " + entry.Key + ", ";
-    //        }
-    //        //Debug.Log(AuctionStats.Instance.round + ": " + name + " reinit2: " + msg );
-    //        //don't give bankrupt agents more goods! just money and maybe food?
-
-    //        foreach (var dep in Commodities[buildable].dep)
-    //        {
-    //            var commodity = dep.Key;
-    //            inputs.Add(commodity);
-    //            //Debug.Log("::" + commodity);
-    //            AddToInventory(commodity, 0, maxStock, Commodities[commodity].price, Commodities[commodity].ProductionRate);
-    //        }
-    //        AddToInventory(buildable, 0, maxStock, Commodities[buildable].price, Commodities[buildable].ProductionRate);
-
-    //        //Debug.Log("New " + gameObject.name + " has " + inventory[buildable].Quantity + " " + buildable);
-    //        //Debug.Log(AuctionStats.Instance.round + ": " + name + " post reinit2: " + msg );
-    //    }
+    //    var profit = GetProfit();
+    //    if (profit <= 0)
+    //        return profit;
+    //    var taxAmt = profit * taxRate;
+    //    cash -= taxAmt;
+    //    return profit - taxAmt;
     //}
-
-    public float TaxProfit(float taxRate)
-    {
-        var profit = GetProfit();
-        if (profit <= 0)
-            return profit;
-        var taxAmt = profit * taxRate;
-        cash -= taxAmt;
-        return profit - taxAmt;
-    }
-    public float GetProfit()
-    {
-        UpdateProfitMarkup();
-        var profit = cash - prevCash;
-        prevCash = cash;
-        return profit;
-    }
-    private void UpdateProfitMarkup()
-    {
-        //    var deficitProfit = 0f;
-        //    if (cash < prevCash)
-        //        deficitProfit = Mathf.Clamp((prevCash - cash) / prevCash, 0, config.profitMarkup);
-        //    profitMarkup = config.profitMarkup + deficitProfit;
-        var profit = cash - prevCash;
-        var deficitProfit = 0f;
-        if (cash < prevCash && soldLastRound.Any(x => x.Value))
-        {
-            deficitProfit = Mathf.Clamp((prevCash - cash) / prevCash, 0, config.profitMarkup - 1f);
-            //profitMarkup += ((prevCash - cash) / prevCash);
-        }
-        profitMarkup = config.profitMarkup + deficitProfit;
-    }
+    //public float GetProfit()
+    //{
+    //    UpdateProfitMarkup();
+    //    var profit = cash - prevCash;
+    //    prevCash = cash;
+    //    return profit;
+    //}
+    //private void UpdateProfitMarkup()
+    //{
+    //    //    var deficitProfit = 0f;
+    //    //    if (cash < prevCash)
+    //    //        deficitProfit = Mathf.Clamp((prevCash - cash) / prevCash, 0, config.profitMarkup);
+    //    //    profitMarkup = config.profitMarkup + deficitProfit;
+    //    var profit = cash - prevCash;
+    //    var deficitProfit = 0f;
+    //    if (cash < prevCash/* && soldLastRound.Any(x => x.Value)*/)
+    //    {
+    //        deficitProfit = Mathf.Clamp((prevCash - cash) / prevCash, 0, config.profitMarkup - 1f);
+    //        //profitMarkup += ((prevCash - cash) / prevCash);
+    //    }
+    //    config.profitMarkup = config.profitMarkup + deficitProfit;
+    //}
     public float Tick()
     {
         //Debug.Log("agents ticking!");
@@ -185,150 +126,87 @@ public class EconAgent : MonoBehaviour
         return tax;
     }
 
-    public (Dictionary<string, float>, Dictionary<string, float>) Produce(Dictionary<string, Commodity> com)
+    public (Dictionary<string, int>, Dictionary<string, int>) Produce(Dictionary<string, Commodity2> com)
     {
-        //TODO sort buildables by profit
-        Dictionary<string, float> producedThisRound = new Dictionary<string, float>();
-        Dictionary<string, float> consumedThisRound = new Dictionary<string, float>();
-        //build as many as one can TODO don't build things that won't earn a profit
-        foreach (var buildable in outputs)
+        Dictionary<string, int> producedThisRound = new Dictionary<string, int>();
+        Dictionary<string, int> consumedThisRound = new Dictionary<string, int>();
+
+        foreach (var buildItemName in outputs)
         {
-            //Debug.Log(AuctionStats.Instance.round + " " + name + " producing " + buildable + " currently in stock " + inventory[buildable].Quantity);
-            //get list of dependent commodities
-            int numProduced = int.MaxValue; //amt agent can produce for commodity buildable
-                                            //find max that can be made w/ available stock
-                                            //Assert.IsTrue(com.ContainsKey(buildable));
-            foreach (var dep in com[buildable].dep)
+            var itemInfo = Inventory.GetItemInfo(buildItemName);
+            int prodRate = com[buildItemName].productionRate;
+            int numProduced = 100;
+            foreach (var dep in com[buildItemName].recipes)
             {
                 var numNeeded = dep.Value;
-                //inventory.Add(dep.Key, new InventoryItem(dep.Key, 0, maxStock, com[dep.Key].price, com[dep.Key].production));
 
-                var numAvail = Inventory[dep.Key].Quantity;
-                numProduced = Math.Min(numProduced, (numAvail / numNeeded) * com[buildable].ProductionRate);
-                //Debug.Log(AuctionStats.Instance.round + " " + name + "can produce " + numProduced + " w/" + numAvail + "/" + numNeeded + dep.Key );
+                var depInfo = Inventory.GetItemInfo(dep.Key);
+                var numAvail = depInfo.Quantity;
+                numProduced = Math.Min(numProduced, (numAvail / numNeeded) * prodRate);
             }
-            //can only build fixed rate at a time
-            //can't produce more than what's in stock
-            int upperBound = Math.Min(Inventory[buildable].productionRate, Inventory[buildable].Deficit());
-            numProduced = Math.Clamp(numProduced, 0, upperBound);
-            //Debug.Log(AuctionStats.Instance.round + " " + name + " upperbound: " + upperBound + " production rate: " + inventory[buildable].productionRate + " room: " + inventory[buildable].Deficit());
-            //Debug.Log(AuctionStats.Instance.round + " " + name + " upperbound: " + upperBound + " producing: " + numProduced);
-            //Assert.IsTrue(numProduced >= 0);
 
-            //build and add to stockpile
+            int upperBound = Math.Min(prodRate, itemInfo.Deficit);
+            numProduced = Math.Clamp(numProduced, 0, upperBound);
             if (numProduced > 0)
             {
-                var buildable_cost = 0f;
-                foreach (var dep in com[buildable].dep)
+                float buildCost = 1;
+                foreach (var dep in com[buildItemName].recipes)
                 {
-                    var stock = Inventory[dep.Key].Quantity;
-                    int numUsed = dep.Value;
-                    numUsed = Mathf.Clamp(numUsed, 0, stock);
-                    buildable_cost += numUsed * Inventory[dep.Key].price;
-                    Inventory[dep.Key].Decrease(numUsed);
+                    int numUsed = dep.Value * (numProduced / prodRate);
+                    var items = Inventory.TakeItems(dep.Key, numUsed);
+                    buildCost += items.Sum(x => x.Cost);
 
                     if (consumedThisRound.ContainsKey(dep.Key))
                         consumedThisRound[dep.Key] += numUsed;
                     else
                         consumedThisRound[dep.Key] = numUsed;
                 }
-                Inventory[buildable].Increase(numProduced);
-                //Debug.Log(AuctionStats.Instance.round + " " + name + " has " + cash.ToString("c2") + " made " + numProduced.ToString("n2") + " " + buildable + " total: " + inventory[buildable].Quantity);
-                producedThisRound[buildable] = numProduced;
-            }
-            //Assert.IsFalse(float.IsNaN(numProduced));
-            //this condition is worrisome 
-            //			//Assert.IsTrue(inventory[buildable].Quantity >= 0);
 
-            //create offer outside
+                Inventory.AddItem(buildItemName, buildCost, numProduced);
+                producedThisRound[buildItemName] = numProduced;
+            }
         }
 
         return (producedThisRound, consumedThisRound);
     }
-    public Dictionary<string, float> Consume()
+    public Dictionary<string, int> Consume()
     {
-        var consumed = new Dictionary<string, float>();
+        var consumed = new Dictionary<string, int>();
 
-        if (config.foodConsumptionRate > 0 && Inventory.ContainsKey("Food"))
+        if (Inventory.GetItemInfo("Food").Quantity < config.foodConsumptionRate)
         {
-            if (Inventory["Food"].Quantity < config.foodConsumptionRate)
-            {
-                starvationDay++;
-                if (starvationDay > config.maxStavationDays && config.maxStavationDays > 0)
-                    GoBankrupt();
-            }
-            else
-            {
-                starvationDay = 0;
-                Inventory["Food"].Decrease(config.foodConsumptionRate);
+            starvationDay++;
+            if (starvationDay > config.maxStavationDays && config.maxStavationDays > 0)
+                GoBankrupt();
+        }
+        else
+        {
+            starvationDay = 0;
+            Inventory.TakeItems("Food", config.foodConsumptionRate);
 
-                if (consumed.ContainsKey("Food"))
-                    consumed["Food"] += config.foodConsumptionRate;
-                else
-                    consumed["Food"] = config.foodConsumptionRate;
-            }
+            if (consumed.ContainsKey("Food"))
+                consumed["Food"] += config.foodConsumptionRate;
+            else
+                consumed["Food"] = config.foodConsumptionRate;
         }
 
         return consumed;
     }
 
-    float ChangeProfession()
+    public int Buy(string itemName, int quantity, float price, int round)
     {
-        string bestGood = AuctionStats.Instance.GetHottestGood();
-        string bestProf = AuctionStats.Instance.GetMostProfitableProfession(outputs[0]);
-
-        string mostDemand = bestProf;
-        //Debug.Log("bestGood: " + bestGood + " bestProfession: " + bestProf);
-        Assert.AreEqual(outputs.Count, 1);
-        //Debug.Log(name + " changing from " + outputs[0] + " to " + mostDemand);
-
-        if (bestGood != "invalid")
-        {
-            mostDemand = bestGood;
-            outputs[0] = mostDemand;
-        }
-
-        Inventory.Clear();
-        List<string> b = new List<string>() { mostDemand };
-        //Reinit(initCash, b);
-        return initCash;
+        Inventory.AddItem(itemName, price, quantity);
+        TradeStats[itemName].AddRecord(TransactionType.Buy, price, quantity, round);
+        cash -= price * quantity;
+        return quantity;
     }
-
-    /*********** Trading ************/
-    public void modify_cash(float quant)
+    public void Sell(string itemName, int quantity, float price, int round)
     {
-        cash += quant;
-    }
-    public void ClearRoundStats()
-    {
-        foreach (var item in Inventory)
-        {
-            item.Value.ClearRoundStats();
-        }
-        taxesPaidThisRound = 0;
-    }
-    public int Buy(string commodity, int quantity, float price)
-    {
-        //Assert.IsFalse(outputs.Contains(commodity)); //agents shouldn't buy what they produce
-        int boughtQuantity = Inventory[commodity].Buy(quantity, price);
-        //Debug.Log(name + " has " + cash.ToString("c2") + " want to buy " + quantity.ToString("n2") + " " + commodity + " for " + price.ToString("c2") + " bought " + boughtQuantity.ToString("n2"));
-        cash -= price * boughtQuantity;
-        return boughtQuantity;
-    }
-    public void Sell(string commodity, int quantity, float price)
-    {
-        Inventory[commodity].Sell(quantity, price);
+        Inventory.TakeItems(itemName, quantity);
+        TradeStats[itemName].AddRecord(TransactionType.Sell, price, quantity, round);
         cash += price * quantity;
-        soldLastRound[commodity] = true;
     }
-    public void UpdateSellerPriceBelief(in Offer offer, in Commodity commodity)
-    {
-        Inventory[commodity.name].UpdateSellerPriceBelief(name, in offer, in commodity);
-    }
-    public void UpdateBuyerPriceBelief(in Bid bid, in Commodity commodity)
-    {
-        Inventory[commodity.name].UpdateBuyerPriceBelief(name, in bid, in commodity);
-    }
+
     //public void UpdateSellerPriceBelief(List<Offer> offers, in Commodity commodity)
     //{
     //    Inventory[commodity.name].UpdateSellerPriceBelief(offers, in commodity);
@@ -342,29 +220,30 @@ public class EconAgent : MonoBehaviour
     /*********** Produce and consume; enter offers and bids to auction house *****/
     int FindSellCount(string c)
     {
-        if (Inventory[c].Surplus() < 1)
+        int quantity = Inventory.GetItemInfo(c).Quantity;
+        if (quantity < 1)
         {
             return 0;
         }
 
-        int numOffers = Inventory[c].Surplus();
+        int numOffers = quantity;
         if (config.enablePriceFavorability)
         {
-            var avgPrice = Commodities[c].avgBidPrice.LastAverage(config.historySize);
-            var lowestPrice = Inventory[c].sellHistory.Min();
-            var highestPrice = Inventory[c].sellHistory.Max();
+            var avgPrice = TradeStats[c].GetAvgBuyPrice(config.historySize);
+            var lowestPrice = TradeStats[c].GetLowestSellPrice();
+            var highestPrice = TradeStats[c].GetHighestSellPrice();
             float favorability = 1f;
             if (lowestPrice != highestPrice)
             {
                 favorability = Mathf.InverseLerp(lowestPrice, highestPrice, avgPrice);
                 favorability = Mathf.Clamp(favorability, 0, 1);
                 //sell at least 1
-                numOffers = Mathf.Max(1, (int)(favorability * Inventory[c].Surplus()));
+                numOffers = Mathf.Max(1, (int)(favorability * quantity));
             }
             //leave some to eat if food
             if (c == "Food" && config.foodConsumptionRate > 0)
             {
-                numOffers = Mathf.Max(numOffers, Inventory[c].Surplus() - 1);
+                numOffers = Mathf.Max(numOffers, quantity - 1);
             }
 
             //Debug.Log(AuctionStats.Instance.round + " " + name + " FindSellCount " + c + ": avgPrice: " + avgPrice.ToString("c2") + " favorability: " + favorability.ToString("n2") + " numAsks: " + numAsks.ToString("n2") + " highestPrice: " + highestPrice.ToString("c2") + ", lowestPrice: " + lowestPrice.ToString("c2"));
@@ -374,12 +253,13 @@ public class EconAgent : MonoBehaviour
     }
     int FindBuyCount(string c)
     {
-        int numBids = Inventory[c].Deficit();
+        var itemInfo = Inventory.GetItemInfo(c);
+        int numBids = itemInfo.Deficit;
         if (config.enablePriceFavorability)
         {
-            var avgPrice = Commodities[c].avgBidPrice.LastAverage(config.historySize);
-            var lowestPrice = Inventory[c].buyHistory.Min();
-            var highestPrice = Inventory[c].buyHistory.Max();
+            var avgPrice = TradeStats[c].GetAvgBuyPrice(config.historySize);
+            var lowestPrice = TradeStats[c].GetLowestBuyPrice();
+            var highestPrice = TradeStats[c].GetHighestBuyPrice();
             //todo SANITY check
             float favorability = .5f;
             if (lowestPrice != highestPrice)
@@ -387,31 +267,32 @@ public class EconAgent : MonoBehaviour
                 favorability = Mathf.InverseLerp(lowestPrice, highestPrice, avgPrice);
                 favorability = Mathf.Clamp(favorability, 0, 1);
                 //float favorability = FindTradeFavorability(c);
-                numBids = Mathf.Max(0, (int)((1f - favorability) * Inventory[c].Deficit()));
+                numBids = Mathf.Max(0, (int)((1f - favorability) * numBids));
             }
-            if (c == "Food" && config.foodConsumptionRate > 0 && Inventory[c].Quantity == 0)
+            if (c == "Food" && config.foodConsumptionRate > 0 && itemInfo.Quantity == 0)
             {
                 numBids = Mathf.Max(numBids, 1);
             }
-
-            //Debug.Log(AuctionStats.Instance.round + " " + name + " FindBuyCount " + c + ": avgPrice: " + avgPrice.ToString("c2") + " favorability: " + (1 - favorability).ToString("n2") + " numBids: " + numBids.ToString("n2") + " highestPrice: " + highestPrice.ToString("c2") + ", lowestPrice: " + lowestPrice.ToString("c2"));
-            //Assert.IsTrue(numBids <= inventory[c].Deficit());
         }
+
+        numBids = Mathf.Min(numBids, 1);
         return numBids;
     }
-    public List<Bid> CreateBids(Dictionary<string, Commodity> com)
+    public List<Bid> CreateBids(Dictionary<string, Commodity2> com)
     {
         var bids = new List<Bid>();
-        //replenish depended commodities
-        foreach (var stock in Inventory)
+        float bidCash = cash;
+        foreach (var stock in com)
         {
+            var itemInfo = Inventory.GetItemInfo(stock.Key);
             bool bidAttempt = false;
-            if (stock.Key == "Food")
+            string itemName = itemInfo.ItemName;
+            if (itemName == "Food")
             {
-                if (!outputs.Contains(stock.Key))
+                if (!outputs.Contains(itemName))
                     bidAttempt = true;
             }
-            else if (inputs.Contains(stock.Key) && Inventory[stock.Key].Quantity < 2)
+            else if (inputs.Contains(itemName) && itemInfo.Quantity < 2)
             {
                 bidAttempt = true;
             }
@@ -419,19 +300,30 @@ public class EconAgent : MonoBehaviour
             if (!bidAttempt)
                 continue;
 
-            int numBids = FindBuyCount(stock.Key);
-            numBids = Mathf.Clamp(numBids, 0, 1);
-            if (numBids > 0 && cash > 0)
+            int buyCount = FindBuyCount(itemInfo.ItemName);
+            if (buyCount > 0 && bidCash > 0)
             {
-                //maybe buy less if expensive?
-                float buyPrice = stock.Value.GetPrice();
-                if (config.onlyBuyWhatsAffordable)
+                //maybe buy less if expensive
+                int lastBoughtRound = TradeStats[itemName].GetLastBoughtDay();
+                float lastBoughtPrice = TradeStats[itemName].GetLatestBuyPrice();
+                float lastBuyAttemptPrice = TradeStats[itemName].lastBidAttempPrice;
+
+                float buyPrice = float.MaxValue;
+                if (lastBoughtRound == AuctionHouse.Instance.round - 1)
                 {
-                    buyPrice = Mathf.Min(cash / numBids, buyPrice);
+                    buyPrice = lastBoughtPrice / config.profitMarkup;
                 }
-                //Debug.Log(AuctionStats.Instance.round + ": " + this.name + " wants to buy " + numBids.ToString("n2") + stock.Key + " for " + buyPrice.ToString("c2") + " each" + " min/maxPriceBeliefs " + stock.Value.minPriceBelief.ToString("c2") + "/" + stock.Value.maxPriceBelief.ToString("c2"));
-                //Assert.IsFalse(numBids < 0);
-                bids.Add(new Bid(stock.Value.commodityName, buyPrice, numBids, this));
+                else
+                {
+                    buyPrice = lastBuyAttemptPrice * config.lossMarkup;
+                }
+
+                if (buyPrice * buyCount > bidCash)
+                    buyPrice = bidCash / buyCount;
+
+                bidCash -= buyPrice * buyCount;
+
+                bids.Add(new Bid(itemName, buyPrice, buyCount, this));
             }
         }
 
@@ -443,51 +335,41 @@ public class EconAgent : MonoBehaviour
         //sell everything not needed by output
         var offers = new List<Offer>();
 
-        foreach (var item in Inventory)
+        foreach (var itemInfo in Inventory.GetItemInfos())
         {
-            var commodityName = item.Key;
-            if (inputs.Contains(commodityName) || !outputs.Contains(commodityName))
+            string itemName = itemInfo.ItemName;
+            if (inputs.Contains(itemName) || !outputs.Contains(itemName))
             {
                 continue;
             }
-            var sellStock = Inventory[commodityName];
-            int sellQuantity = FindSellCount(commodityName);
-            float sellPrice = GetCostOf(commodityName);
-            //float sellPrice = item.Value.GetPrice();
-            if (soldLastRound[commodityName])
-            {
-                sellPrice *= profitMarkup;
-                soldLastRound[commodityName] = false;
-            }
-            else
-            {
-                sellPrice = Mathf.Max(sellPrice / lossMarkup, Inventory[commodityName].price);
-            }
+            int sellQuantity = FindSellCount(itemName);
+            if (sellQuantity == 0)
+                continue;
 
-            if (sellQuantity > 0 && sellPrice > 0)
+            var sellItems = itemInfo.Items.Take(sellQuantity).ToList();
+
+            foreach (var item in sellItems)
             {
-                //Debug.Log(AuctionStats.Instance.round + ": " + name + " wants to sell " + sellQuantity + " " + commodityName + " for " + sellPrice.ToString("c2") + ", has in stock" + inventory[commodityName].Surplus());
-                //Assert.IsTrue(sellQuantity <= inventory[commodityName].Quantity);
-                offers.Add(new Offer(commodityName, sellPrice, sellQuantity, this));
+                int lastSoldRound = TradeStats[itemName].GetLastSoldDay();
+                float lastSoldPrice = TradeStats[itemName].GetLatestSellPrice();
+                float lastSellAttemptPrice = TradeStats[itemName].lastOfferAttempPrice;
+
+                float sellPrice = float.MaxValue;
+                if (lastSoldRound == -1 || lastSoldRound == AuctionHouse.Instance.round - 1)
+                {
+                    sellPrice = lastSoldPrice * config.profitMarkup;
+                }
+                else
+                {
+                    sellPrice = lastSellAttemptPrice / config.lossMarkup;
+                }
+
+                sellPrice = Mathf.Max(sellPrice, item.Cost / itemInfo.ProductionRate);
+
+                offers.Add(new Offer(itemName, sellPrice, sellQuantity, this));
             }
         }
         return offers;
-    }
-    //get the cost of a commodity
-    float GetCostOf(string commodity)
-    {
-        var com = AuctionStats.Instance.book;
-        float cost = 1;
-        foreach (var dep in com[commodity].dep)
-        {
-            var depCommodity = dep.Key;
-            var numDep = dep.Value;
-            var depCost = Inventory[depCommodity].price;
-            cost += numDep * depCost;
-        }
-        cost = cost / Math.Max(com[commodity].ProductionRate - 1, 1);
-
-        return cost;
     }
 
     private void GoBankrupt()
