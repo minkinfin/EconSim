@@ -34,9 +34,9 @@ public class MultiLineChartManager : MonoBehaviour
         }
     }
 
-    public void DrawGraph(Dictionary<string, List<float>> graphData)
+    public void DrawGraph(Dictionary<string, List<int>> graphData)
     {
-        float maxHeight = 1;
+        int maxHeight = 1;
 
         var filteredData = graphData.Values.SelectMany(x => x.Count > maxPlot ? x.Skip(x.Count - maxPlot).ToList() : x);
         if (filteredData.Count() > 0)
@@ -45,7 +45,7 @@ public class MultiLineChartManager : MonoBehaviour
         for (int i = 0; i < graphData.Count; i++)
         {
             string key = graphData.ElementAt(i).Key;
-            List<float> data = graphData[key];
+            List<int> data = graphData[key];
             if (data.Count > maxPlot)
                 data = data.Skip(data.Count - maxPlot).ToList();
             lineGraphRenderers[key].ShowGraph(data, maxHeight);

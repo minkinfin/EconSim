@@ -291,21 +291,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   seed: 32
   tickInterval: 0.1
-  initCash: 10
+  initCash: 10000
   initStock: 0
   maxStock: 3
   backruptThreshold: 0
   foodConsumptionRate: 1
-  enablePriceFavorability: 1
-  buyerBuysOfferPrice: 0
+  enablePriceFavorability: 0
+  buyerBuysOfferPrice: 1
   historySize: 10
   idleTaxRate: 0
   profitMarkup: 1.05
   lossMarkup: 1.05
   randomInitStock: 0
-  starvation: 0
   maxStavationDays: 10
-  minMaxPriceBeliefOffset: 2
+  pauseIfBankrupt: 1
   commodities:
   - name: Berry
     productionRate: 1
@@ -323,6 +322,7 @@ MonoBehaviour:
         Value: 1
       - Key: Stick
         Value: 1
+  initCost: 100
 --- !u!114 &194909954
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -6,7 +6,7 @@ public class AgentConfig : MonoBehaviour
     [Header("Init")]
     public int seed;
     public float tickInterval = .001f;
-    public float initCash = 100;
+    public int initCash = 100;
     public int initStock = 10;
     public int maxStock = 20;
 
@@ -20,13 +20,14 @@ public class AgentConfig : MonoBehaviour
     public float profitMarkup = 1.05f;
     public float lossMarkup = 1.03f;
     public bool randomInitStock = false;
-    public bool starvation = false;
     public int maxStavationDays = 5;
-    public float minMaxPriceBeliefOffset = 2f;
+    public bool pauseIfBankrupt = true;
 
     public List<Commodity2> commodities;
 
     public Dictionary<string, Commodity2> book;
+
+    public int initCost = 100;
 
     public void Awake()
     {

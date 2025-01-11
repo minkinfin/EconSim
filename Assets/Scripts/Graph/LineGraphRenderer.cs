@@ -8,7 +8,7 @@ using UnityEngine.UI;
 public class LineGraphRenderer : Graphic
 {
     public float thickness = 10f;
-    public List<float> points;
+    public List<int> points;
     public bool center = true;
     public int maxPlot = 50;
     public TextMeshProUGUI label;
@@ -130,7 +130,7 @@ public class LineGraphRenderer : Graphic
         return Mathf.Atan2(target.y - vertex.y, target.x - vertex.x) * (180 / Mathf.PI);
     }
 
-    public void ShowGraph(List<float> values, float height)
+    public void ShowGraph(List<int> values, float height)
     {
         points = values;
         maxHeight = height;

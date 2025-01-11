@@ -5,9 +5,9 @@ public class Item
 {
     public Guid Id { get; set; }
     public string Name;
-    public float Cost;
+    public int Cost;
 
-    public Item(string name, float cost)
+    public Item(string name, int cost)
     {
         Id = Guid.NewGuid();
         Name = name;

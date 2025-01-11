@@ -1,43 +1,26 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine.Assertions;
-using UnityEngine;
-using System.Linq;
-using System;
-
 public class Offer
 {
     public string CommodityName { get; private set; }
-    public float Price { get; private set; }
+    public int Price { get; private set; }
     public bool IsMatched { get; private set; }
-    public float AcceptPrice { get; private set; }
+    public int AcceptedPrice { get; set; }
     public int Quantity { get; private set; }
-    float AcceptPriceVolume; // total price of traded goods; sum of price of each good traded over multiple trades
     public int remainingQuantity { get; private set; }
     public EconAgent agent { get; private set; }
-    public Offer(string commodityName, float p, int q, EconAgent a)
+    public int Cost { get; private set; }
+    public Offer(string commodityName, int p, int q, EconAgent a, int c)
     {
         CommodityName = commodityName;
         Price = p;
         remainingQuantity = q;
         Quantity = q;
         agent = a;
+        Cost = c;
     }
-    public void Accepted(float p, int q)
+    public void Accepted(int p, int q)
     {
         IsMatched = true;
+        AcceptedPrice = p;
         remainingQuantity -= q;
-        AcceptPriceVolume += p * q;
-        CalculateAcceptPrice();
-    }
-
-    public void CalculateAcceptPrice()
-    {
-        var tradedQuantity = Quantity - remainingQuantity;
-        if (tradedQuantity == 0)
-        {
-            return;
-        }
-        AcceptPrice = AcceptPriceVolume / tradedQuantity;
     }
 }

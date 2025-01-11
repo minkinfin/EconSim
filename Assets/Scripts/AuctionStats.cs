@@ -27,15 +27,15 @@ public class AuctionStats : MonoBehaviour
         }
     }
 
-    internal float GetAvgClearingPrice(string itemNamem, int v)
+    internal int GetAvgClearingPrice(string itemNamem, int v)
     {
         if (!auctionRecords.ContainsKey(itemNamem) || auctionRecords[itemNamem].Count == 0)
             return 0;
 
-        return auctionRecords[itemNamem].Skip(Mathf.Max(0, auctionRecords[itemNamem].Count - v)).Average(x => x.AvgClearingPrice);
+        return (int)auctionRecords[itemNamem].Skip(Mathf.Max(0, auctionRecords[itemNamem].Count - v)).Average(x => x.AvgClearingPrice);
     }
 
-    internal float GetLastClearingPrice(string itemName)
+    internal int GetLastClearingPrice(string itemName)
     {
         if (!auctionRecords.ContainsKey(itemName) || auctionRecords[itemName].Count == 0)
             return 0;
@@ -51,29 +51,29 @@ public class AuctionStats : MonoBehaviour
         return auctionRecords[name].Last().Trades;
     }
 
-    internal Dictionary<string, List<float>> GetProducedData()
+    internal Dictionary<string, List<int>> GetProducedData()
     {
-        var data = new Dictionary<string, List<float>>();
+        var data = new Dictionary<string, List<int>>();
         foreach (var item in auctionRecords)
         {
-            data.Add(item.Key, item.Value.Select(x => (float)x.Produced).ToList());
+            data.Add(item.Key, item.Value.Select(x => (int)x.Produced).ToList());
         }
         return data;
     }
 
-    internal Dictionary<string, List<float>> GetTradesData()
+    internal Dictionary<string, List<int>> GetTradesData()
     {
-        var data = new Dictionary<string, List<float>>();
+        var data = new Dictionary<string, List<int>>();
         foreach (var item in auctionRecords)
         {
-            data.Add(item.Key, item.Value.Select(x => (float)x.Trades).ToList());
+            data.Add(item.Key, item.Value.Select(x => (int)x.Trades).ToList());
         }
         return data;
     }
 
-    internal Dictionary<string, List<float>> GetStocksData()
+    internal Dictionary<string, List<int>> GetStocksData()
     {
-        var data = new Dictionary<string, List<float>>();
+        var data = new Dictionary<string, List<int>>();
         foreach (var item in auctionRecords)
         {
             data.Add(item.Key, item.Value.Select(x => x.Stocks).ToList());
@@ -81,19 +81,19 @@ public class AuctionStats : MonoBehaviour
         return data;
     }
 
-    internal Dictionary<string, List<float>> GetProfessionData()
+    internal Dictionary<string, List<int>> GetProfessionData()
     {
-        var data = new Dictionary<string, List<float>>();
+        var data = new Dictionary<string, List<int>>();
         foreach (var item in auctionRecords)
         {
-            data.Add(item.Key, item.Value.Select(x => (float)x.Professions).ToList());
+            data.Add(item.Key, item.Value.Select(x => (int)x.Professions).ToList());
         }
         return data;
     }
 
-    internal Dictionary<string, List<float>> GetAvgClearingPriceData()
+    internal Dictionary<string, List<int>> GetAvgClearingPriceData()
     {
-        var data = new Dictionary<string, List<float>>();
+        var data = new Dictionary<string, List<int>>();
         foreach (var item in auctionRecords)
         {
             data.Add(item.Key, item.Value.Select(x => x.AvgClearingPrice).ToList());
@@ -101,12 +101,12 @@ public class AuctionStats : MonoBehaviour
         return data;
     }
 
-    internal Dictionary<string, List<float>> GetConsumedData()
+    internal Dictionary<string, List<int>> GetConsumedData()
     {
-        var data = new Dictionary<string, List<float>>();
+        var data = new Dictionary<string, List<int>>();
         foreach (var item in auctionRecords)
         {
-            data.Add(item.Key, item.Value.Select(x => (float)x.Consumed).ToList());
+            data.Add(item.Key, item.Value.Select(x => (int)x.Consumed).ToList());
         }
         return data;
     }

@@ -1,3 +1,4 @@
+using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,27 +7,37 @@ using UnityEngine;
 [Serializable]
 public class TradeStats
 {
-    public float minPriceBelief;
-    public float maxPriceBelief;
+    public int minPriceBelief;
+    public int maxPriceBelief;
 
     public string itemName;
-    public float lastBidAttempPrice;
-    public float lastOfferAttempPrice;
+    public int lastBuyAttempPrice;
+    public int lastSellAttempPrice;
+    public int lastBoughtPrice;
+    public int lastSoldPrice;
+
+    int consecutiveRoundsWithoutBuy = 0;
+    int consecutiveRoundsBuy = 0;
+    int startConsecutiveBuyPrice = 0;
+
+    int consecutiveRoundsWithoutSale = 0;
+    int consecutiveRoundsSale = 0;
+    int startConsecutiveSellPrice = 0;
+
+    int[] fibonacciSeq = new int[] { 1, 2, 3, 5, 8, 13, 21, 34, 55, 89 };
     private List<TradeRecord> TradeRecords { get; set; }
 
-    public TradeStats(string itemName, float priceBelief)
+    public TradeStats(string itemName, int priceBelief)
     {
         //Assert.IsTrue(_meanPrice >= 0); //TODO really should never be 0???
-        minPriceBelief = priceBelief / 2f;
-        maxPriceBelief = priceBelief * 2f;
+        minPriceBelief = priceBelief;
+        maxPriceBelief = priceBelief * 2;
 
         this.itemName = itemName;
         TradeRecords = new List<TradeRecord>();
-        lastBidAttempPrice = float.NaN;
-        lastOfferAttempPrice = float.NaN;
     }
 
-    public void AddRecord(TransactionType transactionType, float price, int quantity, int round)
+    public void AddRecord(TransactionType transactionType, int price, int quantity, int round)
     {
         var record = new TradeRecord()
         {
@@ -40,150 +51,149 @@ public class TradeStats
         TradeRecords.Add(record);
     }
 
-    void SanePriceBeliefs()
-    {
-        //minPriceBelief = Mathf.Max(cost, minPriceBelief); TODO maybe consider this eventually?
-        minPriceBelief = Mathf.Clamp(minPriceBelief, 0.1f, 900f);
-        maxPriceBelief = Mathf.Max(minPriceBelief * 1.1f, maxPriceBelief);
-        maxPriceBelief = Mathf.Clamp(maxPriceBelief, 1.1f, 1000f);
-        //Assert.IsTrue(minPriceBelief < maxPriceBelief);
-    }
+    //void SanePriceBeliefs(int itemCost)
+    //{
+    //    //minPriceBelief = Mathf.Max(cost, minPriceBelief); TODO maybe consider this eventually?
+    //    //minPriceBelief = Mathf.Clamp(minPriceBelief, 0.1f, 900f);
+    //    //maxPriceBelief = Mathf.Max(minPriceBelief * 1.1f, maxPriceBelief);
+    //    //maxPriceBelief = Mathf.Clamp(maxPriceBelief, 1.1f, 1000f);
 
-    public void UpdateBuyerPriceBelief(string itemName, int productionRate, in Bid bid, AuctionStats auctionStats)
-    {
-        // implementation following paper
-        var quantityBought = bid.Quantity - bid.remainingQuantity;
+    //    minPriceBelief = Mathf.Clamp(minPriceBelief, itemCost, maxPriceBelief);
+    //    consecutiveRoundsBuy = Mathf.Max(0, consecutiveRoundsBuy);
+    //    consecutiveRoundsWithoutBuy = Mathf.Max(0, consecutiveRoundsWithoutBuy);
+    //}
 
-        var historicalMeanPrice = auctionStats.GetAvgClearingPrice(itemName, 10);
-        if (bid.IsMatched)
+    public void UpdateBuyerPriceBelief(int round, string agentName, string itemName, int productionRate, int boughtQty, int unBoughtQty, int lastBuyAttempPrice, int lastBoughtPrice)
+    {
+        this.lastBuyAttempPrice = lastBuyAttempPrice;
+
+        if (lastBoughtPrice == 0)
+            lastBoughtPrice = GetLatestBoughtPrice();
+        this.lastBoughtPrice = lastBoughtPrice;
+
+        if (lastBoughtPrice == 0)
         {
-            maxPriceBelief = historicalMeanPrice * 2f - (historicalMeanPrice * 0.1f / productionRate);
-            minPriceBelief = historicalMeanPrice / 2f - (historicalMeanPrice * 0.1f / productionRate);
+            minPriceBelief = lastBuyAttempPrice;
         }
         else
         {
-            maxPriceBelief = historicalMeanPrice * 2f + (historicalMeanPrice * 0.1f / productionRate);
-            minPriceBelief = historicalMeanPrice / 2f + (historicalMeanPrice * 0.1f / productionRate);
+            float direction = 0;
+            if (unBoughtQty != 0 && boughtQty != 0)
+            {
+                direction = (boughtQty - unBoughtQty) / (float)(boughtQty + unBoughtQty);
+            }
+            else if (unBoughtQty == 0)
+            {
+                direction = 1;
+            }
+            else
+            {
+                direction = -1;
+            }
+            if (direction == 1)
+            {
+                startConsecutiveBuyPrice = Mathf.Min(lastBoughtPrice, lastBuyAttempPrice);
+
+                consecutiveRoundsBuy++;
+                minPriceBelief = startConsecutiveBuyPrice - Mathf.RoundToInt((GetFibonacciMultiplier(consecutiveRoundsBuy) * startConsecutiveBuyPrice) / 100f);
+                maxPriceBelief = Mathf.Max(lastBoughtPrice, lastBuyAttempPrice);
+
+                consecutiveRoundsWithoutBuy = 0;
+            }
+            else if (direction == -1)
+            {
+                if (consecutiveRoundsWithoutBuy == 0)
+                    startConsecutiveBuyPrice = maxPriceBelief;
+
+                consecutiveRoundsWithoutBuy++;
+                minPriceBelief = lastBuyAttempPrice;
+                maxPriceBelief = startConsecutiveBuyPrice + Mathf.RoundToInt((GetFibonacciMultiplier(consecutiveRoundsWithoutBuy) * startConsecutiveBuyPrice) / 100f);
+
+                consecutiveRoundsBuy = 0;
+            }
+            else
+            {
+                consecutiveRoundsBuy = 0;
+                consecutiveRoundsWithoutBuy = 0;
+                maxPriceBelief = Mathf.RoundToInt(maxPriceBelief * direction * 5);
+                minPriceBelief = Mathf.RoundToInt(minPriceBelief * direction * 5);
+            }
         }
 
-        //if (quantityBought * 2 > bid.Quantity) //at least 50% offer filled
-        //{
-        //    // move limits inward by 10 of upper limit%
-        //    var adjustment = maxPriceBelief * 0.1f;
-        //    maxPriceBelief -= adjustment;
-        //    minPriceBelief += adjustment;
-        //    reason_msg = "buy>.5";
-        //}
-        //else
-        //{
-        //    // move upper limit by 10%
-        //    maxPriceBelief *= 1.1f;
-        //    reason_msg = "buy<=.5";
-        //}
 
-        //if (Quantity < maxQuantity / 4) //bid more than total offers and inventory < 1/4 max
-        //{
-        //    //var deltaMean = Mathf.Abs(historicalMeanPrice - bid.Price); //TODO or use auction house mean price?
-        //    //var displacement = deltaMean / historicalMeanPrice;
-        //    //maxPriceBelief += displacement;
-        //    //minPriceBelief += displacement;
-        //    maxPriceBelief += historicalMeanPrice / 5;
-        //    minPriceBelief += historicalMeanPrice / 5;
-        //    reason_msg += "_supply<demand_and_low_inv";
-        //}
-        //else if (bid.Price > bid.AcceptPrice && bid.IsMatched   //bid price > trade price
-        //    || (commodity.offers[^1] > commodity.bids[^1] && bid.Price > historicalMeanPrice))   // or (supply > demand and offer > historical mean)
-        //{
-        //    var overbid = Mathf.Abs(bid.Price - bid.AcceptPrice);
-        //    maxPriceBelief -= overbid * 1.1f;
-        //    minPriceBelief -= overbid * 1.1f;
-        //    reason_msg += "_supply>demand_and_overbid";
-        //}
-        //else if (commodity.bids[^1] > commodity.offers[^1])     //demand > supply
-        //{
-        //    //translate belief range up 1/5th of historical mean price
-        //    maxPriceBelief += historicalMeanPrice / 5;
-        //    minPriceBelief += historicalMeanPrice / 5;
-        //    reason_msg += "_supply<demand";
-        //}
-        //else if (commodity.offers[^1] > commodity.bids[^1])     //supply > demand
-        //{
-        //    //translate belief range down 1/5th of historical mean price
-        //    maxPriceBelief -= historicalMeanPrice / 5;
-        //    minPriceBelief -= historicalMeanPrice / 5;
-        //    reason_msg += "_supply>demand";
-        //}
-
-        SanePriceBeliefs();
+        minPriceBelief = Mathf.Max(minPriceBelief, 0);
+        maxPriceBelief = Mathf.Max(maxPriceBelief, 0);
+        Assert.IsTrue(minPriceBelief <= maxPriceBelief, $"{round} {agentName} {itemName} minP: {minPriceBelief} maxP: {maxPriceBelief}");
     }
-    public void UpdateSellerPriceBelief(string itemName, int productionRate, in Offer offer, AuctionStats auctionStats)
+    public void UpdateSellerPriceBelief(int round, string agentName, string itemName, int productionRate, int soldQty, int unSoldQty, int lastSellAttempPrice, int itemCost, int lastSoldPrice)
     {
-        var prevMinPriceBelief = minPriceBelief;
-        var prevMaxPriceBelief = maxPriceBelief;
-        //SanePriceBeliefs();
+        this.lastSellAttempPrice = lastSellAttempPrice;
 
-        //var meanBeliefPrice = (minPriceBelief + maxPriceBelief) / 2;
-        //var deltaMean = meanBeliefPrice - offer.Price; //TODO or use auction house mean price?
-        var quantitySold = offer.Quantity - offer.remainingQuantity;
-        var historicalMeanPrice = auctionStats.GetAvgClearingPrice(itemName, 10);
-        var lastTradeQuantity = auctionStats.GetLastTradeQuantity(itemName);
-        var market_share = lastTradeQuantity == 0 ? 0 : quantitySold / (float)lastTradeQuantity;
-        var weight = quantitySold / (float)offer.Quantity; //quantitySold / quantityOffered
-        var displacement = (1 - weight) * historicalMeanPrice;
+        if (lastSoldPrice == 0)
+            lastSoldPrice = GetLatestSoldPrice();
+        this.lastSoldPrice = lastSoldPrice;
 
-        if (offer.IsMatched)
+        if (lastSoldPrice == 0)
         {
-            maxPriceBelief = historicalMeanPrice * 2f + (historicalMeanPrice * 0.1f / productionRate);
-            minPriceBelief = historicalMeanPrice / 2f + (historicalMeanPrice * 0.1f / productionRate);
+            maxPriceBelief = lastSellAttempPrice;
         }
         else
         {
-            maxPriceBelief = historicalMeanPrice * 2f - (historicalMeanPrice * 0.1f / productionRate);
-            minPriceBelief = historicalMeanPrice / 2f - (historicalMeanPrice * 0.1f / productionRate);
+            float direction = 0;
+            if (unSoldQty != 0 && soldQty != 0)
+            {
+                direction = (soldQty - unSoldQty) / (float)(soldQty + unSoldQty);
+            }
+            else if (unSoldQty == 0)
+            {
+                direction = 1;
+            }
+            else
+            {
+                direction = -1;
+            }
+
+            if (direction == 1)
+            {
+                startConsecutiveSellPrice = Mathf.Max(lastSoldPrice, lastSellAttempPrice);
+
+                consecutiveRoundsSale++;
+                maxPriceBelief = startConsecutiveSellPrice + Mathf.RoundToInt((GetFibonacciMultiplier(consecutiveRoundsSale) * startConsecutiveSellPrice) / 100f);
+                minPriceBelief = Mathf.Min(lastSoldPrice, lastSellAttempPrice);
+
+                consecutiveRoundsWithoutSale = 0;
+            }
+            else if (direction == -1)
+            {
+                if (consecutiveRoundsWithoutSale == 0)
+                    startConsecutiveSellPrice = minPriceBelief;
+
+                consecutiveRoundsWithoutSale++;
+
+                minPriceBelief = startConsecutiveSellPrice - Mathf.RoundToInt((GetFibonacciMultiplier(consecutiveRoundsWithoutSale) * startConsecutiveSellPrice) / 100f);
+                maxPriceBelief = lastSellAttempPrice;
+                consecutiveRoundsSale = 0;
+            }
+            else
+            {
+                consecutiveRoundsSale = 0;
+                consecutiveRoundsWithoutSale = 0;
+                maxPriceBelief += Mathf.RoundToInt(maxPriceBelief * direction * 5f / 100);
+                minPriceBelief += Mathf.RoundToInt(minPriceBelief * direction * 5f / 100);
+            }
         }
 
-        //if (weight == 0)
-        //{
-        //    //maxPriceBelief -= displacement / 5f;
-        //    //minPriceBelief -= displacement / 5f;
-        //    maxPriceBelief -= historicalMeanPrice / 5;
-        //    minPriceBelief -= historicalMeanPrice / 5;
-        //    reason_msg = "seller_sold_none";
-        //}
-        //else if (market_share < .75f)
-        //{
-        //    maxPriceBelief -= displacement / 6f;
-        //    minPriceBelief -= displacement / 6f;
-        //    reason_msg = "seller_market_share_<.75";
-        //}
-        //else if (offer.Price < offer.AcceptPrice && offer.IsMatched)
-        //{
-        //    var underbid = offer.AcceptPrice - offer.Price;
-        //    maxPriceBelief += underbid * 1.1f;
-        //    minPriceBelief += underbid * 1.1f;
-        //    reason_msg = "seller_under_bid";
-        //}
-        //else if (commodity.bids[^1] > commodity.offers[^1])     //demand > supply
-        //{
-        //    //translate belief range up 1/5th of historical mean price
-        //    maxPriceBelief += historicalMeanPrice / 5;
-        //    minPriceBelief += historicalMeanPrice / 5;
-        //    reason_msg = "seller_demand>supply";
-        //}
-        //else if (commodity.offers[^1] > commodity.bids[^1])     //supply > demand
-        //{
-        //    //translate belief range down 1/5th of historical mean price
-        //    maxPriceBelief -= historicalMeanPrice / 5;
-        //    minPriceBelief -= historicalMeanPrice / 5;
-        //    reason_msg = "seller_demand<=supply";
-        //}
-
-        //ensure buildable price at least cost of input commodities
-
-        SanePriceBeliefs();
+        minPriceBelief = Mathf.Max(minPriceBelief, itemCost);
+        Assert.IsTrue(minPriceBelief <= maxPriceBelief, $"{round} {agentName} {itemName} minP: {minPriceBelief} maxP: {maxPriceBelief}");
     }
-    //TODO change quantity based on historical price ranges & deficit
-    internal float GetLowestBuyPrice()
+
+    private int GetFibonacciMultiplier(int index)
+    {
+        index = Mathf.Clamp(index, 0, fibonacciSeq.Length - 1);
+        return fibonacciSeq[index];
+    }
+
+    internal int GetLowestBuyPrice()
     {
         if (TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Count() == 0)
             return 1;
@@ -191,7 +201,7 @@ public class TradeStats
         return TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Select(x => x.Price).Min();
     }
 
-    internal float GetHighestBuyPrice()
+    internal int GetHighestBuyPrice()
     {
         if (TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Count() == 0)
             return 1;
@@ -199,7 +209,7 @@ public class TradeStats
         return TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Select(x => x.Price).Max();
     }
 
-    internal float GetLatestBuyPrice()
+    internal int GetLatestBoughtPrice()
     {
         if (TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Count() == 0)
             return 1;
@@ -207,7 +217,7 @@ public class TradeStats
         return TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Select(x => x.Price).Last();
     }
 
-    internal float GetLowestSellPrice()
+    internal int GetLowestSoldPrice()
     {
         if (TradeRecords.Where(x => x.TransactionType == TransactionType.Sell).Count() == 0)
             return 1;
@@ -215,7 +225,7 @@ public class TradeStats
         return TradeRecords.Where(x => x.TransactionType == TransactionType.Sell).Select(x => x.Price).Min();
     }
 
-    internal float GetHighestSellPrice()
+    internal int GetHighestSoldPrice()
     {
         if (TradeRecords.Where(x => x.TransactionType == TransactionType.Sell).Count() == 0)
             return 1;
@@ -223,7 +233,7 @@ public class TradeStats
         return TradeRecords.Where(x => x.TransactionType == TransactionType.Sell).Select(x => x.Price).Max();
     }
 
-    internal float GetLatestSellPrice()
+    internal int GetLatestSoldPrice()
     {
         if (TradeRecords.Where(x => x.TransactionType == TransactionType.Sell).Count() == 0)
             return 0;
@@ -231,12 +241,12 @@ public class TradeStats
         return TradeRecords.Where(x => x.TransactionType == TransactionType.Sell).Select(x => x.Price).Last();
     }
 
-    internal float GetAvgBuyPrice(int historySize)
+    internal int GetAvgBuyPrice(int historySize)
     {
         if (TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Count() == 0)
             return 1;
 
-        return TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Skip(Mathf.Max(0, TradeRecords.Count - historySize)).Average(x => x.Price);
+        return (int)TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Skip(Mathf.Max(0, TradeRecords.Count - historySize)).Average(x => x.Price);
     }
 
     internal int GetLastSoldDay()

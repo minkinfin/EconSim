@@ -10,7 +10,7 @@ public class Inventory
     private List<Item> Items;
     private Dictionary<string, Commodity2> Book { get; set; }
 
-    private int capacity = 5;
+    private int capacityPerItem = 4;
 
     public Inventory(Dictionary<string, Commodity2> book)
     {
@@ -18,7 +18,7 @@ public class Inventory
         Book = book;
     }
 
-    internal void AddItem(string name, float cost, int amount = 1)
+    internal void AddItem(string name, int cost, int amount = 1)
     {
         for (int i = 0; i < amount; i++)
         {
@@ -47,15 +47,15 @@ public class Inventory
 
         int quantity = items.Count;
 
-        int availableSlot = capacity - items.Count;
-        int defict = Math.Min(availableSlot, 3);
+        int availableSlot = capacityPerItem - items.Count;
+        //int defict = Math.Min(availableSlot, 3);
         return new ItemInfo
         {
             ItemName = name,
             Quantity = quantity,
             ProductionRate = Book[name].productionRate,
             Items = items,
-            Deficit = defict
+            Deficit = availableSlot
         };
     }
 
