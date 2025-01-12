@@ -253,15 +253,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   round: 0
   maxRounds: 800
-  numAgents:
-    _serializedList:
-    - Key: Berry
-      Value: 1
-    - Key: Stick
-      Value: 1
-    - Key: Food
-      Value: 2
-  roundText: {fileID: 448231423}
+  toggle: {fileID: 935673206}
 --- !u!4 &194909951
 Transform:
   m_ObjectHideFlags: 0
@@ -290,11 +282,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   seed: 32
-  tickInterval: 0.1
+  tickInterval: 0.005
+  pauseAtRound: 134
   initCash: 10000
   initStock: 0
   maxStock: 3
-  backruptThreshold: 0
   foodConsumptionRate: 1
   enablePriceFavorability: 0
   buyerBuysOfferPrice: 1
@@ -303,26 +295,51 @@ MonoBehaviour:
   profitMarkup: 1.05
   lossMarkup: 1.05
   randomInitStock: 0
-  maxStavationDays: 10
-  pauseIfBankrupt: 1
+  maxStavationDays: 20
+  pauseWhenBankrupt: 1
+  initCost: 100
   commodities:
   - name: Berry
-    productionRate: 1
     recipes:
-      _serializedList: []
+    - productionRate: 1
+      materials:
+        _serializedList: []
   - name: Stick
-    productionRate: 1
     recipes:
-      _serializedList: []
+    - productionRate: 1
+      materials:
+        _serializedList: []
+  - name: FireLog
+    recipes:
+    - productionRate: 1
+      materials:
+        _serializedList: []
   - name: Food
-    productionRate: 3
     recipes:
-      _serializedList:
-      - Key: Berry
-        Value: 1
-      - Key: Stick
-        Value: 1
-  initCost: 100
+    - productionRate: 3
+      materials:
+        _serializedList:
+        - Key: Berry
+          Value: 1
+        - Key: Stick
+          Value: 1
+    - productionRate: 3
+      materials:
+        _serializedList:
+        - Key: Berry
+          Value: 1
+        - Key: FireLog
+          Value: 1
+  numAgents:
+    _serializedList:
+    - Key: Berry
+      Value: 1
+    - Key: Stick
+      Value: 1
+    - Key: FireLog
+      Value: 1
+    - Key: Food
+      Value: 3
 --- !u!114 &194909954
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -421,6 +438,7 @@ GameObject:
   - component: {fileID: 448231422}
   - component: {fileID: 448231424}
   - component: {fileID: 448231423}
+  - component: {fileID: 448231425}
   m_Layer: 5
   m_Name: Round Number Text
   m_TagString: Untagged
@@ -546,6 +564,20 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 448231421}
   m_CullTransparentMesh: 1
+--- !u!114 &448231425
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 448231421}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e421be603e28544bbfb1cc049f3c0f8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  scoreText: {fileID: 0}
+  auctionHouse: {fileID: 0}
 --- !u!1001 &456877711
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1893,6 +1925,8 @@ MonoBehaviour:
       Value: {fileID: 2100000, guid: 9af4abec953dc499897631c8b1a301f6, type: 2}
     - Key: Stick
       Value: {fileID: 2100000, guid: 88183afe0842a4c888e2637f5b9dcf58, type: 2}
+    - Key: FireLog
+      Value: {fileID: 2100000, guid: 17a53c98bcf9743adb271d83fa11636d, type: 2}
 --- !u!114 &1612346717
 MonoBehaviour:
   m_ObjectHideFlags: 0

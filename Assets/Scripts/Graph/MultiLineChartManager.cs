@@ -10,7 +10,6 @@ public class MultiLineChartManager : MonoBehaviour
     public int maxPlot = 50;
     public TextMeshProUGUI title;
     protected AgentConfig config;
-    private Dictionary<string, Commodity2> book => config.book;
 
     void Awake()
     {
@@ -24,13 +23,13 @@ public class MultiLineChartManager : MonoBehaviour
         if (lineGraphRenderers == null)
             lineGraphRenderers = new Dictionary<string, LineGraphRenderer>();
 
-        for (int i = 0; i < book.Count; i++)
+        for (int i = 0; i < config.commodities.Count; i++)
         {
-            string key = book.ElementAt(i).Key;
+            string itemName = config.commodities[i].name;
             var lineGraphRenderer = transform.Find("Line" + i).GetComponent<LineGraphRenderer>();
-            lineGraphRenderer.color = commColors[key].color;
+            lineGraphRenderer.color = commColors[itemName].color;
             lineGraphRenderer.maxPlot = maxPlot;
-            lineGraphRenderers.Add(key, lineGraphRenderer);
+            lineGraphRenderers.Add(itemName, lineGraphRenderer);
         }
     }
 

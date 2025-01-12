@@ -5,6 +5,8 @@ using System;
 using AYellowpaper.SerializedCollections;
 using UnityEditor.Build.Reporting;
 using static UnityEditor.Progress;
+using UnityEngine.Windows;
+using NUnit.Framework;
 
 public class EconAgent : MonoBehaviour
 {
@@ -13,15 +15,11 @@ public class EconAgent : MonoBehaviour
     public int uid;
     public int cash;
     public int starvationDay;
-    int prevCash = 0;
     [SerializedDictionary("Name", "Item")]
     public SerializedDictionary<string, TradeStats> TradeStats;
     public Inventory Inventory;
     Dictionary<string, int> perItemCost = new Dictionary<string, int>(); //commodities stockpiled
-    int taxesPaidThisRound = 0;
-
     public List<string> outputs { get; private set; } //can produce commodities
-    HashSet<string> inputs = new HashSet<string>();
 
     //production has dependencies on commodities->populates stock
     //production rate is limited by assembly lines (queues/event lists)
@@ -32,7 +30,6 @@ public class EconAgent : MonoBehaviour
     //from the paper (base implementation)
     // Use this for initialization
     public bool IsBankrupt { get; set; }
-    private Dictionary<string, Commodity2> book => config.book;
 
     void Awake()
     {
@@ -42,95 +39,35 @@ public class EconAgent : MonoBehaviour
     public void Init(AgentConfig cfg, int initCash, List<string> b)
     {
         config = cfg;
-        Inventory = new Inventory(book);
-        config = cfg;
+        Inventory = new Inventory(config);
         uid = uid_idx++;
 
         //list of commodities self can produce
         //get initial stockpiles
         outputs = b;
         cash = initCash;
-        prevCash = cash;
-        inputs.Clear();
-        foreach (var com in book)
+        foreach (var com in config.commodities)
         {
             int guessCost = config.initCost;
-            if (outputs.Contains(com.Key))
+            if (outputs.Contains(com.name))
             {
-                int costFromDep = 0;
-                foreach (var dep in book[com.Key].recipes)
+                foreach (var recipe in com.recipes)
                 {
-                    var depInfo = Inventory.GetItemInfo(dep.Key);
-                    costFromDep += config.initCost * dep.Value;
-                    inputs.Add(dep.Key);
+                    int costFromDep = 0;
+                    foreach (var material in recipe.materials)
+                    {
+                        costFromDep += config.initCost * material.Value;
+                    }
+                    guessCost += costFromDep / recipe.productionRate;
                 }
-                guessCost = (guessCost + costFromDep) / book[com.Key].productionRate;
             }
 
-            Inventory.AddItem(com.Key, guessCost, 0);
-            TradeStats.Add(com.Key, new TradeStats(com.Key, guessCost));
+            Inventory.AddItem(com.name, guessCost, 0);
+            TradeStats.Add(com.name, new TradeStats(com.name, guessCost));
         }
-
-        IsBankrupt = false;
-    }
-    public float PayTax(float taxRate)
-    {
-        int idleTax = Mathf.RoundToInt(cash * taxRate);
-        cash -= idleTax;
-        taxesPaidThisRound = idleTax;
-        return idleTax;
     }
 
-    //public float TaxProfit(float taxRate)
-    //{
-    //    var profit = GetProfit();
-    //    if (profit <= 0)
-    //        return profit;
-    //    var taxAmt = profit * taxRate;
-    //    cash -= taxAmt;
-    //    return profit - taxAmt;
-    //}
-    //public float GetProfit()
-    //{
-    //    UpdateProfitMarkup();
-    //    var profit = cash - prevCash;
-    //    prevCash = cash;
-    //    return profit;
-    //}
-    //private void UpdateProfitMarkup()
-    //{
-    //    //    var deficitProfit = 0f;
-    //    //    if (cash < prevCash)
-    //    //        deficitProfit = Mathf.Clamp((prevCash - cash) / prevCash, 0, config.profitMarkup);
-    //    //    profitMarkup = config.profitMarkup + deficitProfit;
-    //    var profit = cash - prevCash;
-    //    var deficitProfit = 0f;
-    //    if (cash < prevCash/* && soldLastRound.Any(x => x.Value)*/)
-    //    {
-    //        deficitProfit = Mathf.Clamp((prevCash - cash) / prevCash, 0, config.profitMarkup - 1f);
-    //        //profitMarkup += ((prevCash - cash) / prevCash);
-    //    }
-    //    config.profitMarkup = config.profitMarkup + deficitProfit;
-    //}
-    public float Tick()
-    {
-        //Debug.Log("agents ticking!");
-        float tax = 0;
-
-        if (config.backruptThreshold > 0 && cash < config.backruptThreshold)
-        {
-            GoBankrupt();
-            //Debug.Log(name + " producing " + outputs[0] + " is bankrupt: " + cash.ToString("c2") + " or starving where food=" + inventory["Food"].Quantity);
-            tax = -cash;// + ChangeProfession(); //existing debt + 
-        }
-        //foreach (var buildable in outputs)
-        //{
-        //    Inventory[buildable].cost = GetCostOf(buildable);
-        //}
-        return tax;
-    }
-
-    public (Dictionary<string, int>, Dictionary<string, int>) Produce(Dictionary<string, Commodity2> com)
+    public (Dictionary<string, int>, Dictionary<string, int>) Produce()
     {
         Dictionary<string, int> producedThisRound = new Dictionary<string, int>();
         Dictionary<string, int> consumedThisRound = new Dictionary<string, int>();
@@ -138,35 +75,38 @@ public class EconAgent : MonoBehaviour
         foreach (var buildItemName in outputs)
         {
             var itemInfo = Inventory.GetItemInfo(buildItemName);
-            int prodRate = com[buildItemName].productionRate;
-            int numProduced = prodRate;
-            foreach (var dep in com[buildItemName].recipes)
+            var com = config.commodities.Find(x => x.name == buildItemName);
+            foreach (var recipe in com.recipes)
             {
-                var numNeeded = dep.Value;
-
-                var depInfo = Inventory.GetItemInfo(dep.Key);
-                var numAvail = depInfo.Quantity;
-                numProduced = Math.Min(numProduced, numAvail / numNeeded);
-            }
-
-            numProduced = Math.Min(numProduced, itemInfo.Deficit / prodRate);
-            if (numProduced > 0)
-            {
-                int buildCost = config.initCost;
-                foreach (var dep in com[buildItemName].recipes)
+                int prodRate = recipe.productionRate;
+                int numProduced = prodRate;
+                foreach (var material in recipe.materials)
                 {
-                    int numUsed = dep.Value * numProduced;
-                    var items = Inventory.TakeItems(dep.Key, numUsed);
+                    var numNeeded = material.Value;
+                    var materialInfo = Inventory.GetItemInfo(material.Key);
+                    var numAvail = materialInfo.Quantity;
+                    numProduced = Math.Min(numProduced, numAvail / numNeeded);
+                }
+                numProduced = Math.Min(numProduced, itemInfo.Deficit / prodRate);
+
+                if (numProduced == 0)
+                    continue;
+
+                int buildCost = config.initCost;
+                foreach (var material in recipe.materials)
+                {
+                    int numUsed = material.Value * numProduced;
+                    var items = Inventory.TakeItems(material.Key, numUsed);
                     buildCost += items.Sum(x => x.Cost);
 
-                    if (consumedThisRound.ContainsKey(dep.Key))
-                        consumedThisRound[dep.Key] += numUsed;
-                    else
-                        consumedThisRound[dep.Key] = numUsed;
+                    if (!consumedThisRound.ContainsKey(material.Key))
+                        consumedThisRound[material.Key] = 0;
+                    consumedThisRound[material.Key] += numUsed;
                 }
-
                 Inventory.AddItem(buildItemName, buildCost / prodRate, numProduced * prodRate);
-                producedThisRound[buildItemName] = numProduced * prodRate;
+                if (!producedThisRound.ContainsKey(buildItemName))
+                    producedThisRound[buildItemName] = 0;
+                producedThisRound[buildItemName] += numProduced * prodRate;
             }
         }
 
@@ -199,6 +139,7 @@ public class EconAgent : MonoBehaviour
         Inventory.AddItem(itemName, price, quantity);
         TradeStats[itemName].AddRecord(TransactionType.Buy, price, quantity, round);
         cash -= price * quantity;
+        Assert.IsTrue(cash >= 0, $"{round} {itemName}");
         return quantity;
     }
     public void Sell(string itemName, int quantity, int price, int round)
@@ -208,17 +149,152 @@ public class EconAgent : MonoBehaviour
         cash += price * quantity;
     }
 
-    //public void UpdateSellerPriceBelief(List<Offer> offers, in Commodity commodity)
-    //{
-    //    Inventory[commodity.name].UpdateSellerPriceBelief(offers, in commodity);
-    //}
-    //public void UpdateBuyerPriceBelief(List<Bid> bids, in Commodity commodity)
-    //{
-    //    Inventory[commodity.name].UpdateBuyerPriceBelief(name, bids, in commodity);
-    //}
+    public List<Bid> CreateBids()
+    {
+        var bids = new List<Bid>();
+        int remainBidCash = cash;
+        foreach (var com in config.commodities)
+        {
+            if (remainBidCash <= 0)
+                break;
 
+            string itemName = com.name;
+            if (itemName == "Food" && !outputs.Contains(itemName))
+            {
+                int buyCount = FindBuyCount(itemName);
+                int buyPrice = CalculateBuyPrice(itemName);
 
-    /*********** Produce and consume; enter offers and bids to auction house *****/
+                if (buyPrice * buyCount > remainBidCash)
+                    buyCount = Mathf.FloorToInt(remainBidCash / buyPrice);
+
+                if (buyCount > 0)
+                {
+                    remainBidCash -= buyPrice * buyCount;
+                    bids.Add(new Bid(itemName, buyPrice, buyCount, this));
+                }
+            }
+            else
+            {
+                List<List<Bid>> bidsByRecipes = new List<List<Bid>>();
+                Dictionary<string, int> materialBuyPriceDict = new Dictionary<string, int>();
+                for (int i = 0; i < com.recipes.Count; i++)
+                {
+                    int remainBidCashForRecipe = remainBidCash;
+                    var recipe = com.recipes[i];
+                    bidsByRecipes.Add(new List<Bid>());
+                    foreach (var material in recipe.materials)
+                    {
+                        int buyCount = FindBuyCount(material.Key);
+                        int buyPrice = 0;
+                        if (materialBuyPriceDict.ContainsKey(material.Key))
+                        {
+                            buyPrice = materialBuyPriceDict[material.Key];
+                        }
+                        else
+                        {
+                            buyPrice = CalculateBuyPrice(material.Key);
+                            materialBuyPriceDict[material.Key] = buyPrice;
+                        }
+
+                        if (buyPrice * buyCount > remainBidCashForRecipe)
+                            buyCount = Mathf.FloorToInt(remainBidCashForRecipe / buyPrice);
+
+                        if (buyCount > 0)
+                        {
+                            remainBidCashForRecipe -= buyPrice * buyCount;
+                            bidsByRecipes[i].Add(new Bid(material.Key, buyPrice, buyCount, this));
+                        }
+                    }
+                }
+                if (bidsByRecipes.Count > 0)
+                {
+                    var cheapestRecipe = bidsByRecipes.OrderBy(x => x.Sum(y => y.Price * y.Quantity)).First();
+                    if (cheapestRecipe.Count > 0)
+                    {
+                        bids.AddRange(cheapestRecipe);
+                        remainBidCash -= cheapestRecipe.Sum(x => x.Price * x.Quantity);
+                    }
+                }
+
+                //int buyCount = FindBuyCount(itemName);
+                //int buyPrice = CalculateBuyPrice(itemName);
+                //while (buyPrice * buyCount > remainBidCash)
+                //{
+                //    buyCount--;
+                //}
+
+                //if (buyCount > 0)
+                //{
+                //    remainBidCash -= buyPrice * buyCount;
+                //    bids.Add(new Bid(itemName, buyPrice, buyCount, this));
+                //}
+            }
+        }
+
+        return bids;
+    }
+    public List<Offer> CreateOffers()
+    {
+        //sell everything not needed by output
+        var offers = new List<Offer>();
+
+        foreach (var itemInfo in Inventory.GetItemInfos())
+        {
+            string itemName = itemInfo.ItemName;
+            var com = config.commodities.Find(x => x.name == itemName);
+            var inputs = com.FindInputs();
+            if (inputs.Contains(itemName) || !outputs.Contains(itemName))
+            {
+                continue;
+            }
+            int sellQuantity = FindSellCount(itemName);
+            if (sellQuantity == 0)
+                continue;
+
+            var sellItems = itemInfo.Items.Take(sellQuantity).ToList();
+            var sellItemsGroupByCost = sellItems.GroupBy(x => x.Cost).Select(x => new { Cost = x.Key, Count = x.Count() }).ToList();
+
+            foreach (var group in sellItemsGroupByCost)
+            {
+                TradeStats tradeStats = TradeStats[itemName];
+                int sellPrice = CalculateSellPrice(tradeStats, group.Cost);
+                offers.Add(new Offer(itemName, sellPrice, group.Count, this, group.Cost));
+            }
+        }
+        return offers;
+    }
+
+    int FindBuyCount(string c)
+    {
+        var itemInfo = Inventory.GetItemInfo(c);
+        int numBids = itemInfo.Deficit;
+        if (config.enablePriceFavorability)
+        {
+            var avgPrice = TradeStats[c].GetAvgBuyPrice(config.historySize);
+            var lowestPrice = TradeStats[c].GetLowestBuyPrice();
+            var highestPrice = TradeStats[c].GetHighestBuyPrice();
+            //todo SANITY check
+            float favorability = .5f;
+            if (lowestPrice != highestPrice)
+            {
+                favorability = Mathf.InverseLerp(lowestPrice, highestPrice, avgPrice);
+                favorability = Mathf.Clamp(favorability, 0, 1);
+                //float favorability = FindTradeFavorability(c);
+                numBids = Mathf.Max(0, (int)((1f - favorability) * numBids));
+            }
+            if (c == "Food" && config.foodConsumptionRate > 0 && itemInfo.Quantity == 0)
+            {
+                float buyProb = Mathf.Lerp(0, config.maxStavationDays, starvationDay);
+                float rand = UnityEngine.Random.value;
+
+                if (rand < buyProb)
+                    numBids = Mathf.Max(numBids, 1);
+            }
+        }
+
+        //numBids = Mathf.Min(numBids, 1);
+        return numBids;
+    }
     int FindSellCount(string c)
     {
         int quantity = Inventory.GetItemInfo(c).Quantity;
@@ -245,114 +321,21 @@ public class EconAgent : MonoBehaviour
         //leave some to eat if food
         if (c == "Food" && config.foodConsumptionRate > 0)
         {
+            //float rand = UnityEngine.Random.value;
+            //float starvationProb = Mathf.InverseLerp(0, config.maxStavationDays, starvationDay);
+            //if (rand < starvationProb)
+            //    numOffers = Mathf.Max(0, numOffers - config.foodConsumptionRate);
             numOffers = Mathf.Max(0, numOffers - config.foodConsumptionRate);
         }
         return numOffers;
     }
-    int FindBuyCount(string c)
+
+    private int CalculateBuyPrice(string itemName)
     {
-        var itemInfo = Inventory.GetItemInfo(c);
-        int numBids = itemInfo.Deficit;
-        if (config.enablePriceFavorability)
-        {
-            var avgPrice = TradeStats[c].GetAvgBuyPrice(config.historySize);
-            var lowestPrice = TradeStats[c].GetLowestBuyPrice();
-            var highestPrice = TradeStats[c].GetHighestBuyPrice();
-            //todo SANITY check
-            float favorability = .5f;
-            if (lowestPrice != highestPrice)
-            {
-                favorability = Mathf.InverseLerp(lowestPrice, highestPrice, avgPrice);
-                favorability = Mathf.Clamp(favorability, 0, 1);
-                //float favorability = FindTradeFavorability(c);
-                numBids = Mathf.Max(0, (int)((1f - favorability) * numBids));
-            }
-            if (c == "Food" && config.foodConsumptionRate > 0 && itemInfo.Quantity == 0)
-            {
-                numBids = Mathf.Max(numBids, 1);
-            }
-        }
-
-        //numBids = Mathf.Min(numBids, 1);
-        return numBids;
-    }
-    public List<Bid> CreateBids(Dictionary<string, Commodity2> com)
-    {
-        var bids = new List<Bid>();
-        int remainBidCash = cash;
-        foreach (var stock in com)
-        {
-            var itemInfo = Inventory.GetItemInfo(stock.Key);
-            bool bidAttempt = false;
-            string itemName = itemInfo.ItemName;
-            if (itemName == "Food")
-            {
-                if (!outputs.Contains(itemName))
-                    bidAttempt = true;
-            }
-            else if (inputs.Contains(itemName) && itemInfo.Quantity < 2)
-            {
-                bidAttempt = true;
-            }
-
-            if (!bidAttempt)
-                continue;
-
-            int buyCount = FindBuyCount(itemInfo.ItemName);
-            TradeStats tradeStats = TradeStats[itemName];
-            int buyPrice = CalculateBuyPrice(remainBidCash, tradeStats);
-            while (buyPrice * buyCount > remainBidCash && buyCount > 0)
-            {
-                buyCount--;
-            }
-
-            if (buyCount > 0 && remainBidCash > 0)
-            {
-                remainBidCash -= buyPrice * buyCount;
-
-                bids.Add(new Bid(itemName, buyPrice, buyCount, this));
-            }
-        }
-
-        return bids;
-    }
-
-    public List<Offer> CreateOffers()
-    {
-        //sell everything not needed by output
-        var offers = new List<Offer>();
-
-        foreach (var itemInfo in Inventory.GetItemInfos())
-        {
-            string itemName = itemInfo.ItemName;
-            if (inputs.Contains(itemName) || !outputs.Contains(itemName))
-            {
-                continue;
-            }
-            int sellQuantity = FindSellCount(itemName);
-            if (sellQuantity == 0)
-                continue;
-
-            var sellItems = itemInfo.Items.Take(sellQuantity).ToList();
-            var sellItemsGroupByCost = sellItems.GroupBy(x => x.Cost).Select(x => new { Cost = x.Key, Count = x.Count() }).ToList();
-
-            foreach (var group in sellItemsGroupByCost)
-            {
-                TradeStats tradeStats = TradeStats[itemName];
-                int sellPrice = CalculateSellPrice(tradeStats, group.Cost);
-                offers.Add(new Offer(itemName, sellPrice, group.Count, this, group.Cost));
-            }
-        }
-        return offers;
-    }
-
-    private int CalculateBuyPrice(int remainBidCash, TradeStats tradeStats)
-    {
-        int buyPrice = UnityEngine.Random.Range(tradeStats.minPriceBelief, tradeStats.maxPriceBelief);
+        int buyPrice = UnityEngine.Random.Range(TradeStats[itemName].minPriceBelief, TradeStats[itemName].maxPriceBelief);
 
         return buyPrice;
     }
-
     private int CalculateSellPrice(TradeStats tradeStats, int itemCost)
     {
         //int sellPrice = int.MaxValue;

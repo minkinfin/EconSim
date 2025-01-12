@@ -9,6 +9,7 @@ public class RoundDisplay : MonoBehaviour
     private void Awake()
     {
         scoreText = GetComponent<TextMeshProUGUI>();
+        auctionHouse = FindFirstObjectByType<AuctionHouse>();
     }
     void Start()
     {

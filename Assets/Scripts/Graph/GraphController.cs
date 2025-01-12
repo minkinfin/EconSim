@@ -25,7 +25,6 @@ public class GraphController : MonoBehaviour
     [SerializedDictionary("Comm", "Color")]
     public SerializedDictionary<string, Material> commColor;
 
-    private Dictionary<string, List<GraphMe>> graphs;
     protected AgentConfig config;
 
     private void Start()

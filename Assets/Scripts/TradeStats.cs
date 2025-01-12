@@ -16,13 +16,12 @@ public class TradeStats
     public int lastBoughtPrice;
     public int lastSoldPrice;
 
-    int consecutiveRoundsWithoutBuy = 0;
-    int consecutiveRoundsBuy = 0;
-    int startConsecutiveBuyPrice = 0;
+    public int roundsNoBuy = 0;
+    public int roundsBuy = 0;
 
-    int consecutiveRoundsWithoutSale = 0;
-    int consecutiveRoundsSale = 0;
-    int startConsecutiveSellPrice = 0;
+    public int roundsNoSale = 0;
+    public int roundsSale = 0;
+    int startFiboPrice = 0;
 
     int[] fibonacciSeq = new int[] { 1, 2, 3, 5, 8, 13, 21, 34, 55, 89 };
     private List<TradeRecord> TradeRecords { get; set; }
@@ -63,7 +62,7 @@ public class TradeStats
     //    consecutiveRoundsWithoutBuy = Mathf.Max(0, consecutiveRoundsWithoutBuy);
     //}
 
-    public void UpdateBuyerPriceBelief(int round, string agentName, string itemName, int productionRate, int boughtQty, int unBoughtQty, int lastBuyAttempPrice, int lastBoughtPrice)
+    public void UpdateBuyerPriceBelief(int round, string agentName, string itemName, int boughtQty, int unBoughtQty, int lastBuyAttempPrice, int lastBoughtPrice)
     {
         this.lastBuyAttempPrice = lastBuyAttempPrice;
 
@@ -92,31 +91,33 @@ public class TradeStats
             }
             if (direction == 1)
             {
-                startConsecutiveBuyPrice = Mathf.Min(lastBoughtPrice, lastBuyAttempPrice);
+                if (roundsBuy == 0)
+                    startFiboPrice = minPriceBelief;
+                roundsBuy++;
 
-                consecutiveRoundsBuy++;
-                minPriceBelief = startConsecutiveBuyPrice - Mathf.RoundToInt((GetFibonacciMultiplier(consecutiveRoundsBuy) * startConsecutiveBuyPrice) / 100f);
-                maxPriceBelief = Mathf.Max(lastBoughtPrice, lastBuyAttempPrice);
+                minPriceBelief = startFiboPrice - Mathf.RoundToInt((GetFibonacciMultiplier(roundsBuy) * startFiboPrice) / 100f);
+                maxPriceBelief = lastBoughtPrice;
 
-                consecutiveRoundsWithoutBuy = 0;
+                roundsNoBuy = 0;
             }
             else if (direction == -1)
             {
-                if (consecutiveRoundsWithoutBuy == 0)
-                    startConsecutiveBuyPrice = maxPriceBelief;
+                if (roundsNoBuy == 0)
+                    startFiboPrice = maxPriceBelief;
+                roundsNoBuy++;
 
-                consecutiveRoundsWithoutBuy++;
                 minPriceBelief = lastBuyAttempPrice;
-                maxPriceBelief = startConsecutiveBuyPrice + Mathf.RoundToInt((GetFibonacciMultiplier(consecutiveRoundsWithoutBuy) * startConsecutiveBuyPrice) / 100f);
+                maxPriceBelief = startFiboPrice + Mathf.RoundToInt((GetFibonacciMultiplier(roundsNoBuy) * startFiboPrice) / 100f);
 
-                consecutiveRoundsBuy = 0;
+                roundsBuy = 0;
             }
             else
             {
-                consecutiveRoundsBuy = 0;
-                consecutiveRoundsWithoutBuy = 0;
-                maxPriceBelief = Mathf.RoundToInt(maxPriceBelief * direction * 5);
-                minPriceBelief = Mathf.RoundToInt(minPriceBelief * direction * 5);
+                roundsBuy = 0;
+                roundsNoBuy = 0;
+                int priceWindow = Mathf.RoundToInt((maxPriceBelief - minPriceBelief) * direction * 3f / 100);
+                maxPriceBelief += priceWindow;
+                minPriceBelief += priceWindow;
             }
         }
 
@@ -125,7 +126,7 @@ public class TradeStats
         maxPriceBelief = Mathf.Max(maxPriceBelief, 0);
         Assert.IsTrue(minPriceBelief <= maxPriceBelief, $"{round} {agentName} {itemName} minP: {minPriceBelief} maxP: {maxPriceBelief}");
     }
-    public void UpdateSellerPriceBelief(int round, string agentName, string itemName, int productionRate, int soldQty, int unSoldQty, int lastSellAttempPrice, int itemCost, int lastSoldPrice)
+    public void UpdateSellerPriceBelief(int round, string agentName, string itemName, int soldQty, int unSoldQty, int lastSellAttempPrice, int itemCost, int lastSoldPrice)
     {
         this.lastSellAttempPrice = lastSellAttempPrice;
 
@@ -155,31 +156,32 @@ public class TradeStats
 
             if (direction == 1)
             {
-                startConsecutiveSellPrice = Mathf.Max(lastSoldPrice, lastSellAttempPrice);
+                if (roundsSale == 0)
+                    startFiboPrice = maxPriceBelief;
+                roundsSale++;
 
-                consecutiveRoundsSale++;
-                maxPriceBelief = startConsecutiveSellPrice + Mathf.RoundToInt((GetFibonacciMultiplier(consecutiveRoundsSale) * startConsecutiveSellPrice) / 100f);
-                minPriceBelief = Mathf.Min(lastSoldPrice, lastSellAttempPrice);
+                maxPriceBelief = startFiboPrice + Mathf.RoundToInt((GetFibonacciMultiplier(roundsSale) * startFiboPrice) / 100f);
+                minPriceBelief = lastSoldPrice;
 
-                consecutiveRoundsWithoutSale = 0;
+                roundsNoSale = 0;
             }
             else if (direction == -1)
             {
-                if (consecutiveRoundsWithoutSale == 0)
-                    startConsecutiveSellPrice = minPriceBelief;
+                if (roundsNoSale == 0)
+                    startFiboPrice = minPriceBelief;
+                roundsNoSale++;
 
-                consecutiveRoundsWithoutSale++;
-
-                minPriceBelief = startConsecutiveSellPrice - Mathf.RoundToInt((GetFibonacciMultiplier(consecutiveRoundsWithoutSale) * startConsecutiveSellPrice) / 100f);
+                minPriceBelief = startFiboPrice - Mathf.RoundToInt((GetFibonacciMultiplier(roundsNoSale) * startFiboPrice) / 100f);
                 maxPriceBelief = lastSellAttempPrice;
-                consecutiveRoundsSale = 0;
+                roundsSale = 0;
             }
             else
             {
-                consecutiveRoundsSale = 0;
-                consecutiveRoundsWithoutSale = 0;
-                maxPriceBelief += Mathf.RoundToInt(maxPriceBelief * direction * 5f / 100);
-                minPriceBelief += Mathf.RoundToInt(minPriceBelief * direction * 5f / 100);
+                roundsSale = 0;
+                roundsNoSale = 0;
+                int priceWindow = Mathf.RoundToInt((maxPriceBelief - minPriceBelief) * direction * 3f / 100);
+                maxPriceBelief += priceWindow;
+                minPriceBelief += priceWindow;
             }
         }
 

@@ -8,14 +8,15 @@ public class Inventory
 {
     [SerializeField]
     private List<Item> Items;
-    private Dictionary<string, Commodity2> Book { get; set; }
+    private Dictionary<string, Commodity> Book { get; set; }
 
     private int capacityPerItem = 4;
 
-    public Inventory(Dictionary<string, Commodity2> book)
+    AgentConfig config;
+    public Inventory(AgentConfig config)
     {
         Items = new List<Item>();
-        Book = book;
+        this.config = config;
     }
 
     internal void AddItem(string name, int cost, int amount = 1)
@@ -53,7 +54,6 @@ public class Inventory
         {
             ItemName = name,
             Quantity = quantity,
-            ProductionRate = Book[name].productionRate,
             Items = items,
             Deficit = availableSlot
         };
