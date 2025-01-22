@@ -282,11 +282,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   seed: 32
-  tickInterval: 0.005
-  pauseAtRound: 134
-  initCash: 10000
+  tickInterval: 0.05
+  pauseAtRound: -1
+  initCash: 1000000
   initStock: 0
-  maxStock: 3
+  capacityPerItem: 10000
   foodConsumptionRate: 1
   enablePriceFavorability: 0
   buyerBuysOfferPrice: 1
@@ -298,6 +298,7 @@ MonoBehaviour:
   maxStavationDays: 20
   pauseWhenBankrupt: 1
   initCost: 100
+  nextAttemptPriceMultiplier: 0.01
   commodities:
   - name: Berry
     recipes:
@@ -305,11 +306,6 @@ MonoBehaviour:
       materials:
         _serializedList: []
   - name: Stick
-    recipes:
-    - productionRate: 1
-      materials:
-        _serializedList: []
-  - name: FireLog
     recipes:
     - productionRate: 1
       materials:
@@ -323,23 +319,14 @@ MonoBehaviour:
           Value: 1
         - Key: Stick
           Value: 1
-    - productionRate: 3
-      materials:
-        _serializedList:
-        - Key: Berry
-          Value: 1
-        - Key: FireLog
-          Value: 1
   numAgents:
     _serializedList:
     - Key: Berry
       Value: 1
     - Key: Stick
       Value: 1
-    - Key: FireLog
-      Value: 1
     - Key: Food
-      Value: 3
+      Value: 1
 --- !u!114 &194909954
 MonoBehaviour:
   m_ObjectHideFlags: 0

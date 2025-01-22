@@ -35,9 +35,9 @@ public class TransactionHistory : List<Transaction>
     }
     public void UpdateLast(Transaction t)
     {
-        var priceVolume = base[^1].quantity * base[^1].price;
-        priceVolume += t.price * t.quantity;
-        base[^1].quantity += t.quantity;
-        base[^1].price = priceVolume / base[^1].quantity;
+        var priceVolume = base[^1].qty * base[^1].price;
+        priceVolume += t.price * t.qty;
+        base[^1].qty += t.qty;
+        base[^1].price = priceVolume / base[^1].qty;
     }
 }

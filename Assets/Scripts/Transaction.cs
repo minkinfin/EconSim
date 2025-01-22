@@ -10,8 +10,8 @@ public class Transaction {
     public Transaction(float p, float q)
     {
         price = p;
-        quantity = q;
+        qty = q;
     }
     public float price;
-    public float quantity;
+    public float qty;
 }

@@ -7,7 +7,7 @@
     public int Offers { get; internal set; }
     public int AvgOfferPrice { get; internal set; }
     public int AvgBidPrice { get; internal set; }
-    public int AvgClearingPrice { get; internal set; }
+    public int ClearingPrice { get; internal set; }
     public int Stocks { get; internal set; }
     public int Capitals { get; internal set; }
     public int Profits { get; internal set; }

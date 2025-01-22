@@ -3,9 +3,6 @@ using UnityEngine;
 using System.Linq;
 using System;
 using AYellowpaper.SerializedCollections;
-using UnityEditor.Build.Reporting;
-using static UnityEditor.Progress;
-using UnityEngine.Windows;
 using NUnit.Framework;
 
 public class EconAgent : MonoBehaviour
@@ -18,7 +15,6 @@ public class EconAgent : MonoBehaviour
     [SerializedDictionary("Name", "Item")]
     public SerializedDictionary<string, TradeStats> TradeStats;
     public Inventory Inventory;
-    Dictionary<string, int> perItemCost = new Dictionary<string, int>(); //commodities stockpiled
     public List<string> outputs { get; private set; } //can produce commodities
 
     //production has dependencies on commodities->populates stock
@@ -51,6 +47,7 @@ public class EconAgent : MonoBehaviour
             int guessCost = config.initCost;
             if (outputs.Contains(com.name))
             {
+                int guessCostFromRecipe = 0;
                 foreach (var recipe in com.recipes)
                 {
                     int costFromDep = 0;
@@ -58,11 +55,13 @@ public class EconAgent : MonoBehaviour
                     {
                         costFromDep += config.initCost * material.Value;
                     }
-                    guessCost += costFromDep / recipe.productionRate;
+                    guessCostFromRecipe += costFromDep / recipe.productionRate;
                 }
+
+                guessCost += guessCostFromRecipe / com.recipes.Count;
             }
 
-            Inventory.AddItem(com.name, guessCost, 0);
+            //Inventory.AddItem(com.name, guessCost, com.recipes, 0);
             TradeStats.Add(com.name, new TradeStats(com.name, guessCost));
         }
     }
@@ -84,7 +83,7 @@ public class EconAgent : MonoBehaviour
                 {
                     var numNeeded = material.Value;
                     var materialInfo = Inventory.GetItemInfo(material.Key);
-                    var numAvail = materialInfo.Quantity;
+                    var numAvail = materialInfo.Qty;
                     numProduced = Math.Min(numProduced, numAvail / numNeeded);
                 }
                 numProduced = Math.Min(numProduced, itemInfo.Deficit / prodRate);
@@ -103,7 +102,7 @@ public class EconAgent : MonoBehaviour
                         consumedThisRound[material.Key] = 0;
                     consumedThisRound[material.Key] += numUsed;
                 }
-                Inventory.AddItem(buildItemName, buildCost / prodRate, numProduced * prodRate);
+                Inventory.AddItem(buildItemName, buildCost / prodRate, prodRate, numProduced * prodRate);
                 if (!producedThisRound.ContainsKey(buildItemName))
                     producedThisRound[buildItemName] = 0;
                 producedThisRound[buildItemName] += numProduced * prodRate;
@@ -114,7 +113,7 @@ public class EconAgent : MonoBehaviour
     }
     public Dictionary<string, int> Consume(Dictionary<string, int> consumed)
     {
-        if (Inventory.GetItemInfo("Food").Quantity < config.foodConsumptionRate)
+        if (Inventory.GetItemInfo("Food").Qty < config.foodConsumptionRate)
         {
             starvationDay++;
             if (starvationDay > config.maxStavationDays && config.maxStavationDays != -1)
@@ -134,43 +133,42 @@ public class EconAgent : MonoBehaviour
         return consumed;
     }
 
-    public int Buy(string itemName, int quantity, int price, int round)
+    public List<Item> Buy(string itemName, int qty, int price, int bidPrice, int round, List<Item> items)
     {
-        Inventory.AddItem(itemName, price, quantity);
-        TradeStats[itemName].AddRecord(TransactionType.Buy, price, quantity, round);
-        cash -= price * quantity;
+        if (price * qty > cash)
+        {
+            qty = cash / price;
+        }
+        List<Item> itemsToBuy = items.Take(qty).ToList();
+        if (itemsToBuy.Count <= 0)
+            return itemsToBuy;
+
+        Inventory.AddItem(itemsToBuy);
+        TradeStats[itemName].AddBuyRecord(bidPrice, qty, round);
+        cash -= price * qty;
         Assert.IsTrue(cash >= 0, $"{round} {itemName}");
-        return quantity;
+        return itemsToBuy;
     }
-    public void Sell(string itemName, int quantity, int price, int round)
+    public void Sell(string itemName, int qty, int price, int round)
     {
-        Inventory.TakeItems(itemName, quantity);
-        TradeStats[itemName].AddRecord(TransactionType.Sell, price, quantity, round);
-        cash += price * quantity;
+        Inventory.TakeItems(itemName, qty);
+        TradeStats[itemName].AddSellRecord(price, qty, round);
+        cash += price * qty;
     }
 
     public List<Bid> CreateBids()
     {
         var bids = new List<Bid>();
-        int remainBidCash = cash;
         foreach (var com in config.commodities)
         {
-            if (remainBidCash <= 0)
-                break;
-
             string itemName = com.name;
             if (itemName == "Food" && !outputs.Contains(itemName))
             {
-                int buyCount = FindBuyCount(itemName);
-                int buyPrice = CalculateBuyPrice(itemName);
-
-                if (buyPrice * buyCount > remainBidCash)
-                    buyCount = Mathf.FloorToInt(remainBidCash / buyPrice);
-
-                if (buyCount > 0)
+                var inventory = Inventory.GetItemInfo(itemName);
+                if (inventory.Qty == 0)
                 {
-                    remainBidCash -= buyPrice * buyCount;
-                    bids.Add(new Bid(itemName, buyPrice, buyCount, this));
+                    int buyPrice = CalculateBuyPrice(itemName);
+                    bids.Add(new Bid(itemName, buyPrice, 1, this));
                 }
             }
             else
@@ -179,7 +177,6 @@ public class EconAgent : MonoBehaviour
                 Dictionary<string, int> materialBuyPriceDict = new Dictionary<string, int>();
                 for (int i = 0; i < com.recipes.Count; i++)
                 {
-                    int remainBidCashForRecipe = remainBidCash;
                     var recipe = com.recipes[i];
                     bidsByRecipes.Add(new List<Bid>());
                     foreach (var material in recipe.materials)
@@ -196,23 +193,18 @@ public class EconAgent : MonoBehaviour
                             materialBuyPriceDict[material.Key] = buyPrice;
                         }
 
-                        if (buyPrice * buyCount > remainBidCashForRecipe)
-                            buyCount = Mathf.FloorToInt(remainBidCashForRecipe / buyPrice);
-
                         if (buyCount > 0)
                         {
-                            remainBidCashForRecipe -= buyPrice * buyCount;
                             bidsByRecipes[i].Add(new Bid(material.Key, buyPrice, buyCount, this));
                         }
                     }
                 }
                 if (bidsByRecipes.Count > 0)
                 {
-                    var cheapestRecipe = bidsByRecipes.OrderBy(x => x.Sum(y => y.Price * y.Quantity)).First();
+                    var cheapestRecipe = bidsByRecipes.OrderBy(x => x.Sum(y => y.Price * y.Qty)).First();
                     if (cheapestRecipe.Count > 0)
                     {
                         bids.AddRange(cheapestRecipe);
-                        remainBidCash -= cheapestRecipe.Sum(x => x.Price * x.Quantity);
                     }
                 }
 
@@ -252,13 +244,15 @@ public class EconAgent : MonoBehaviour
                 continue;
 
             var sellItems = itemInfo.Items.Take(sellQuantity).ToList();
-            var sellItemsGroupByCost = sellItems.GroupBy(x => x.Cost).Select(x => new { Cost = x.Key, Count = x.Count() }).ToList();
+            var sellItemsGroupByCost = sellItems
+            .GroupBy(x => x.Cost)
+            .Select(x => new { Cost = x.Key, Count = x.Count(), Items = x.ToList() }).ToList();
 
             foreach (var group in sellItemsGroupByCost)
             {
                 TradeStats tradeStats = TradeStats[itemName];
                 int sellPrice = CalculateSellPrice(tradeStats, group.Cost);
-                offers.Add(new Offer(itemName, sellPrice, group.Count, this, group.Cost));
+                offers.Add(new Offer(itemName, sellPrice, group.Count, this, group.Cost, group.Items));
             }
         }
         return offers;
@@ -282,51 +276,50 @@ public class EconAgent : MonoBehaviour
                 //float favorability = FindTradeFavorability(c);
                 numBids = Mathf.Max(0, (int)((1f - favorability) * numBids));
             }
-            if (c == "Food" && config.foodConsumptionRate > 0 && itemInfo.Quantity == 0)
-            {
-                float buyProb = Mathf.Lerp(0, config.maxStavationDays, starvationDay);
-                float rand = UnityEngine.Random.value;
-
-                if (rand < buyProb)
-                    numBids = Mathf.Max(numBids, 1);
-            }
         }
+        //if (c == "Food" && config.foodConsumptionRate > 0 && itemInfo.Qty == 0)
+        //{
+        //    float buyProb = Mathf.Lerp(0, config.maxStavationDays, starvationDay);
+        //    float rand = UnityEngine.Random.value;
 
-        //numBids = Mathf.Min(numBids, 1);
+        //    if (rand < buyProb)
+        //        numBids = Mathf.Max(numBids, 1);
+        //}
+
+        numBids = Mathf.Min(numBids, 3);
         return numBids;
     }
     int FindSellCount(string c)
     {
-        int quantity = Inventory.GetItemInfo(c).Quantity;
-        if (quantity < 1)
+        int qty = Inventory.GetItemInfo(c).Qty;
+        if (qty < 1)
         {
             return 0;
         }
 
-        int numOffers = quantity;
-        if (config.enablePriceFavorability)
-        {
-            var avgPrice = TradeStats[c].GetAvgBuyPrice(config.historySize);
-            var lowestPrice = TradeStats[c].GetLowestSoldPrice();
-            var highestPrice = TradeStats[c].GetHighestSoldPrice();
-            float favorability = 1f;
-            if (lowestPrice != highestPrice)
-            {
-                favorability = Mathf.InverseLerp(lowestPrice, highestPrice, avgPrice);
-                favorability = Mathf.Clamp(favorability, 0, 1);
-                //sell at least 1
-                numOffers = Mathf.Max(1, (int)(favorability * quantity));
-            }
-        }
+        int numOffers = qty;
+        //if (config.enablePriceFavorability)
+        //{
+        //    var avgPrice = TradeStats[c].GetAvgBuyPrice(config.historySize);
+        //    var lowestPrice = TradeStats[c].GetLowestSoldPrice();
+        //    var highestPrice = TradeStats[c].GetHighestSoldPrice();
+        //    float favorability = 1f;
+        //    if (lowestPrice != highestPrice)
+        //    {
+        //        favorability = Mathf.InverseLerp(lowestPrice, highestPrice, avgPrice);
+        //        favorability = Mathf.Clamp(favorability, 0, 1);
+        //        //sell at least 1
+        //        numOffers = Mathf.Max(1, (int)(favorability * qty));
+        //    }
+        //}
         //leave some to eat if food
-        if (c == "Food" && config.foodConsumptionRate > 0)
-        {
-            //float rand = UnityEngine.Random.value;
-            //float starvationProb = Mathf.InverseLerp(0, config.maxStavationDays, starvationDay);
-            //if (rand < starvationProb)
-            //    numOffers = Mathf.Max(0, numOffers - config.foodConsumptionRate);
-            numOffers = Mathf.Max(0, numOffers - config.foodConsumptionRate);
-        }
+        //if (c == "Food" && config.foodConsumptionRate > 0)
+        //{
+        //    float rand = UnityEngine.Random.value;
+        //    float starvationProb = Mathf.InverseLerp(0, config.maxStavationDays, starvationDay);
+        //    if (rand < starvationProb)
+        //        numOffers = Mathf.Max(0, numOffers - config.foodConsumptionRate);
+        //}
         return numOffers;
     }
 

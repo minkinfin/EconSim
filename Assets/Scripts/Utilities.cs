@@ -9,10 +9,10 @@
 
 //public class Utilities : MonoBehaviour
 //{
-//    public static void TransferQuantity(float quantity, EconAgent from, EconAgent to)
+//    public static void TransferQuantity(float qty, EconAgent from, EconAgent to)
 //    {
-//        from.modify_cash(-quantity);
-//        to.modify_cash(quantity);
+//        from.modify_cash(-qty);
+//        to.modify_cash(qty);
 //    }
 //}
 

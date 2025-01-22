@@ -9,9 +9,6 @@ public class Inventory
     [SerializeField]
     private List<Item> Items;
     private Dictionary<string, Commodity> Book { get; set; }
-
-    private int capacityPerItem = 4;
-
     AgentConfig config;
     public Inventory(AgentConfig config)
     {
@@ -19,11 +16,11 @@ public class Inventory
         this.config = config;
     }
 
-    internal void AddItem(string name, int cost, int amount = 1)
+    internal void AddItem(string name, int cost, int prodRate, int amount = 1)
     {
         for (int i = 0; i < amount; i++)
         {
-            Item item = new Item(name, cost);
+            Item item = new Item(name, cost, prodRate);
             Items.Add(item);
         }
     }
@@ -46,14 +43,14 @@ public class Inventory
     {
         List<Item> items = GetItems(name);
 
-        int quantity = items.Count;
+        int qty = items.Count;
 
-        int availableSlot = capacityPerItem - items.Count;
-        //int defict = Math.Min(availableSlot, 3);
+        int availableSlot = config.capacityPerItem - items.Count;
+        int defict = Math.Min(availableSlot, 5);
         return new ItemInfo
         {
             ItemName = name,
-            Quantity = quantity,
+            Qty = qty,
             Items = items,
             Deficit = availableSlot
         };
@@ -70,5 +67,15 @@ public class Inventory
         }
 
         return itemInfos;
+    }
+
+    internal void AddItem(List<Item> items)
+    {
+        Items.AddRange(items);
+    }
+
+    internal void RemoveItem(List<Item> items)
+    {
+        Items = Items.Where(x => !items.Select(y => y.Id).Contains(x.Id)).ToList();
     }
 }

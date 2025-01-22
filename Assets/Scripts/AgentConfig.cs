@@ -11,7 +11,7 @@ public class AgentConfig : MonoBehaviour
 
     public int initCash = 100;
     public int initStock = 10;
-    public int maxStock = 20;
+    public int capacityPerItem = 4;
 
     [Header("Decision Parameters")]
     public int foodConsumptionRate = 1;

@@ -66,7 +66,7 @@ public class AuctionHouse : MonoBehaviour
         {
             Produced = 0,
             Trades = 0,
-            AvgClearingPrice = 0,
+            ClearingPrice = 0,
             Consumed = 0
         };
         var recordDict = new Dictionary<string, AuctionRecord>();
@@ -117,9 +117,14 @@ public class AuctionHouse : MonoBehaviour
             currentAuctionRecord.Add(entry.name, new AuctionRecord());
         }
         agents = agents.Where(x => !x.IsBankrupt).ToList();
+        //Debug.Log("Round " + round);
         foreach (EconAgent agent in agents)
         {
             (var producedThisRound, var consumedThisRound) = agent.Produce();
+            foreach (var entry in producedThisRound)
+            {
+                totalProducedThisRound[entry.Key] += entry.Value;
+            }
 
             var agentOffers = agent.CreateOffers();
             var agentBids = agent.CreateBids();
@@ -129,10 +134,12 @@ public class AuctionHouse : MonoBehaviour
             foreach (var entry in producedThisRound)
             {
                 totalProducedThisRound[entry.Key] += entry.Value;
+                //Debug.Log("--" + agent.name + " produced " + entry.Key + "(" + entry.Value + ")");
             }
             foreach (var entry in consumedThisRound)
             {
                 totalConsumedThisRound[entry.Key] += entry.Value;
+                //Debug.Log("--" + agent.name + " consumed " + entry.Key + "(" + entry.Value + ")");
             }
         }
 
@@ -172,12 +179,12 @@ public class AuctionHouse : MonoBehaviour
 
     protected void ResolveOffers(string itemName, List<Bid> bids, List<Offer> offers)
     {
-        int totalOfferQuantity = offers.Sum(offer => offer.Quantity);
-        int totalBidQuantity = bids.Sum(bid => bid.Quantity);
-        currentAuctionRecord[itemName].Bids = totalBidQuantity;
-        currentAuctionRecord[itemName].Offers = totalOfferQuantity;
-        currentAuctionRecord[itemName].AvgBidPrice = totalBidQuantity > 0 ? (bids.Sum((x) => x.Price * x.Quantity) / totalBidQuantity) : 0;
-        currentAuctionRecord[itemName].AvgOfferPrice = totalOfferQuantity > 0 ? (offers.Sum((x) => x.Price * x.Quantity) / totalOfferQuantity) : 0;
+        int totalOfferQty = offers.Sum(offer => offer.Qty);
+        int totalBidQty = bids.Sum(bid => bid.Qty);
+        currentAuctionRecord[itemName].Bids = totalBidQty;
+        currentAuctionRecord[itemName].Offers = totalOfferQty;
+        currentAuctionRecord[itemName].AvgBidPrice = totalBidQty > 0 ? (bids.Sum((x) => x.Price * x.Qty) / totalBidQty) : 0;
+        currentAuctionRecord[itemName].AvgOfferPrice = totalOfferQty > 0 ? (offers.Sum((x) => x.Price * x.Qty) / totalOfferQty) : 0;
 
         offers = offers.OrderBy(x => x.Price).ToList();
         bids = bids.OrderBy(x => UnityEngine.Random.value).ToList();
@@ -185,86 +192,80 @@ public class AuctionHouse : MonoBehaviour
         int moneyExchangedThisRound = 0;
         int goodsExchangedThisRound = 0;
 
-        int maxLoop = 100;
-        int j = 0;
         for (int i = 0; i < offers.Count; i++)
         {
             var offer = offers[i];
-            int bidIdx = 0;
-            while (offer.remainingQuantity > 0 && bidIdx < bids.Count && j < maxLoop)
+            for (int j = 0; j < bids.Count && offer.RemainingQty > 0; j++)
             {
-                if (bidIdx >= bids.Count)
-                {
-                    bidIdx = bidIdx % bids.Count;
-                }
-                var bid = bids[bidIdx];
+                var bid = bids[j];
+                if (bid.RemainingQty <= 0)
+                    continue;
 
-                int tradeQuantity = Math.Min(bid.remainingQuantity, offers[i].remainingQuantity);
-                if (offer.Price > bid.Price || bid.agent.cash < offer.Price || tradeQuantity <= 0)
+                int acceptedQty = Math.Min(bid.RemainingQty, offers[i].RemainingQty);
+                if (offer.Price > bid.Price)
                 {
-                    bidIdx++;
+                    if (itemName == "Food")
+                        Debug.Log($"<color=#aa0000>r=</color>{round} {itemName}({acceptedQty}) {offer.Price}({offer.agent.name}) {bid.Price}({bid.agent.name})");
                     continue;
                 }
+
                 int acceptedPrice = (offer.Price + bid.Price) / 2;
                 if (config.buyerBuysOfferPrice)
-                {
                     acceptedPrice = offer.Price;
-                }
-
                 //int[] possiblePrices = new int[] { offer.Price, bid.Price };
                 //int acceptedPrice = possiblePrices[UnityEngine.Random.Range(0, 2)];
 
-                int boughtQuantity = bid.agent.Buy(itemName, tradeQuantity, acceptedPrice, round);
-                offer.agent.Sell(itemName, boughtQuantity, acceptedPrice, round);
-                offer.Accepted(boughtQuantity);
-                bid.Accepted(boughtQuantity);
+                if (bid.agent.cash < acceptedPrice * acceptedQty)
+                    acceptedQty = bid.agent.cash / acceptedPrice;
+                if (acceptedQty == 0)
+                    continue;
 
-                moneyExchangedThisRound += offer.Price * boughtQuantity;
-                goodsExchangedThisRound += boughtQuantity;
-
-                //this is necessary for price belief updates after the big loop
-
-                //go to next offer/bid if fullfilled
-                if (bid.remainingQuantity == 0)
-                {
-                    bidIdx++;
-                }
-
-                j = (j + 1) % bids.Count;
+                if (itemName == "Food")
+                    Debug.Log($"<color=#00aa00>r=</color>{round} {itemName}({acceptedQty}) {offer.Price}({offer.agent.name}) {bid.Price}({bid.agent.name}) ");
+                ExecuteTrade(bid, offer, acceptedPrice, acceptedQty);
+                moneyExchangedThisRound += acceptedPrice * acceptedQty;
+                goodsExchangedThisRound += acceptedQty;
             }
         }
 
-        int averagePrice = 0;
-        int lastClearingPrice = auctionStats.GetLastClearingPrice(itemName);
-        if (moneyExchangedThisRound == 0)
-            averagePrice = lastClearingPrice;
-        else if (goodsExchangedThisRound > 0)
-            averagePrice = moneyExchangedThisRound / goodsExchangedThisRound;
+        int clearingPrice = auctionStats.GetLastClearingPrice(itemName);
+        if (moneyExchangedThisRound > 0 && goodsExchangedThisRound > 0)
+            clearingPrice = moneyExchangedThisRound / goodsExchangedThisRound;
 
-        currentAuctionRecord[itemName].AvgClearingPrice = averagePrice;
+        currentAuctionRecord[itemName].ClearingPrice = clearingPrice;
         currentAuctionRecord[itemName].Trades = goodsExchangedThisRound;
+
+        foreach (var offer in offers)
+        {
+            offer.agent.TradeStats[itemName].AddSellRecord(offer.Price, offer.Qty - offer.RemainingQty, round);
+        }
+        foreach (var bid in bids)
+        {
+            bid.agent.TradeStats[itemName].AddBuyRecord(bid.Price, bid.Qty - bid.RemainingQty, round);
+        }
 
         var offerInfos = offers.GroupBy(x => x.agent.name).Select(x => new
         {
             AgentName = x.Key,
-            SoldQty = x.Where(y => y.IsMatched).Sum(y => y.Quantity),
-            UnSoldQty = x.Where(y => !y.IsMatched).Sum(y => y.Quantity),
+            SoldQty = x.Sum(y => y.Qty) - x.Sum(y => y.RemainingQty),
+            UnSoldQty = x.Sum(y => y.RemainingQty),
             lastOfferAttempPrice = x.Last().Price,
-            lastSoldPrice = x.Where(y => y.IsMatched).Any() ? x.Where(y => y.IsMatched).Last().Price : 0,
-            AvgCost = (int)x.Average(y => y.Cost)
+            lastSoldPrice = x.Any(y => y.RemainingQty == 0) ? x.Last(x => x.RemainingQty == 0).Price : 0,
+            AvgCost = (int)x.Average(y => y.Cost),
+            ProdRate = (int)x.SelectMany(y => y.Items.Select(z => z.ProdRate)).Average()
         }).ToList();
-        foreach (var offerInfo in offerInfos)
+        foreach (var obj in offerInfos)
         {
-            var agent = agents.First(x => x.name == offerInfo.AgentName);
-            agent.TradeStats[itemName].UpdateSellerPriceBelief(round, offerInfo.AgentName, itemName, offerInfo.SoldQty, offerInfo.UnSoldQty, offerInfo.lastOfferAttempPrice, offerInfo.AvgCost, offerInfo.lastSoldPrice);
+            var agent = agents.First(x => x.name == obj.AgentName);
+            agent.TradeStats[itemName].UpdateSellerPriceBelief(round, obj.AgentName, itemName, obj.SoldQty, obj.UnSoldQty, obj.lastOfferAttempPrice, obj.AvgCost, obj.lastSoldPrice, obj.ProdRate);
         }
         offers.Clear();
 
         var bidInfos = bids.GroupBy(x => x.agent.name).Select(x => new
         {
             AgentName = x.Key,
-            BoughtQty = x.Where(y => y.IsMatched).Sum(y => y.Quantity),
-            UnBoughtQty = x.Where(y => !y.IsMatched).Sum(y => y.Quantity),
+            BoughtQty = x.Sum(y => y.Qty) - x.Sum(y => y.RemainingQty),
+            UnBoughtQty = x.Sum(y => y.RemainingQty),
             lastBidAttempPrice = x.Max(y => y.Price),
             lastBoughtPrice = x.Where(y => y.IsMatched).Any() ? x.Where(y => y.IsMatched).Last().Price : 0
         }).ToList();
@@ -275,6 +276,18 @@ public class AuctionHouse : MonoBehaviour
         }
 
         bids.Clear();
+    }
+
+    private void ExecuteTrade(Bid bid, Offer offer, int price, int qty)
+    {
+        List<Item> itemsToBuy = offer.Items.Take(qty).ToList();
+
+        bid.agent.Inventory.AddItem(itemsToBuy);
+        offer.agent.Inventory.RemoveItem(itemsToBuy);
+        bid.agent.cash -= price * qty;
+        offer.agent.cash += price * qty;
+        bid.RemainingQty -= qty;
+        offer.RemainingQty -= qty;
     }
 
     protected void CountStockPileAndCash()
@@ -295,7 +308,7 @@ public class AuctionHouse : MonoBehaviour
             foreach (var itemInfo in itemInfos)
             {
                 if (agent.outputs.Contains(itemInfo.ItemName))
-                    stockPile[itemInfo.ItemName] += itemInfo.Quantity;
+                    stockPile[itemInfo.ItemName] += itemInfo.Qty;
             }
 
             cashList[agent.outputs[0]].Add(agent.cash);

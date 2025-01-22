@@ -32,7 +32,7 @@ public class AuctionStats : MonoBehaviour
         if (!auctionRecords.ContainsKey(itemNamem) || auctionRecords[itemNamem].Count == 0)
             return 0;
 
-        return (int)auctionRecords[itemNamem].Skip(Mathf.Max(0, auctionRecords[itemNamem].Count - v)).Average(x => x.AvgClearingPrice);
+        return (int)auctionRecords[itemNamem].Skip(Mathf.Max(0, auctionRecords[itemNamem].Count - v)).Average(x => x.ClearingPrice);
     }
 
     internal int GetLastClearingPrice(string itemName)
@@ -40,7 +40,7 @@ public class AuctionStats : MonoBehaviour
         if (!auctionRecords.ContainsKey(itemName) || auctionRecords[itemName].Count == 0)
             return 0;
 
-        return auctionRecords[itemName].Last().AvgClearingPrice;
+        return auctionRecords[itemName].Last().ClearingPrice;
     }
 
     internal int GetLastTradeQuantity(string name)
@@ -96,7 +96,7 @@ public class AuctionStats : MonoBehaviour
         var data = new Dictionary<string, List<int>>();
         foreach (var item in auctionRecords)
         {
-            data.Add(item.Key, item.Value.Select(x => x.AvgClearingPrice).ToList());
+            data.Add(item.Key, item.Value.Select(x => x.ClearingPrice).ToList());
         }
         return data;
     }

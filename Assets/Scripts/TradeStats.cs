@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,7 +24,9 @@ public class TradeStats
     int startFiboPrice = 0;
 
     int[] fibonacciSeq = new int[] { 1, 2, 3, 5, 8, 13, 21, 34, 55, 89 };
-    private List<TradeRecord> TradeRecords { get; set; }
+    private List<TradeRecord> BuyRecords { get; set; }
+    private List<TradeRecord> SellRecords { get; set; }
+
 
     public TradeStats(string itemName, int priceBelief)
     {
@@ -33,21 +35,35 @@ public class TradeStats
         maxPriceBelief = priceBelief * 2;
 
         this.itemName = itemName;
-        TradeRecords = new List<TradeRecord>();
+        BuyRecords = new List<TradeRecord>();
+        SellRecords = new List<TradeRecord>();
+
     }
 
-    public void AddRecord(TransactionType transactionType, int price, int quantity, int round)
+    public void AddBuyRecord(int price, int qty, int round)
     {
         var record = new TradeRecord()
         {
             ItemName = itemName,
-            TransactionType = transactionType,
             Price = price,
-            Quantity = quantity,
+            Qty = qty,
             Round = round
         };
 
-        TradeRecords.Add(record);
+        BuyRecords.Add(record);
+    }
+
+    public void AddSellRecord(int price, int qty, int round)
+    {
+        var record = new TradeRecord()
+        {
+            ItemName = itemName,
+            Price = price,
+            Qty = qty,
+            Round = round
+        };
+
+        SellRecords.Add(record);
     }
 
     //void SanePriceBeliefs(int itemCost)
@@ -65,6 +81,8 @@ public class TradeStats
     public void UpdateBuyerPriceBelief(int round, string agentName, string itemName, int boughtQty, int unBoughtQty, int lastBuyAttempPrice, int lastBoughtPrice)
     {
         this.lastBuyAttempPrice = lastBuyAttempPrice;
+        var prevMinPriceBelief = minPriceBelief;
+        var prevMaxPriceBelief = maxPriceBelief;
 
         if (lastBoughtPrice == 0)
             lastBoughtPrice = GetLatestBoughtPrice();
@@ -72,16 +90,26 @@ public class TradeStats
 
         if (lastBoughtPrice == 0)
         {
+            maxPriceBelief = lastBuyAttempPrice + (maxPriceBelief - minPriceBelief);
             minPriceBelief = lastBuyAttempPrice;
         }
         else
         {
             float direction = 0;
-            if (unBoughtQty != 0 && boughtQty != 0)
-            {
-                direction = (boughtQty - unBoughtQty) / (float)(boughtQty + unBoughtQty);
-            }
-            else if (unBoughtQty == 0)
+            //if (unBoughtQty != 0 && boughtQty != 0)
+            //{
+            //    direction = (boughtQty - unBoughtQty) / (float)(boughtQty + unBoughtQty);
+            //}
+            //else if (unBoughtQty == 0)
+            //{
+            //    direction = 1;
+            //}
+            //else
+            //{
+            //    direction = -1;
+            //}
+
+            if (boughtQty != 0)
             {
                 direction = 1;
             }
@@ -89,6 +117,7 @@ public class TradeStats
             {
                 direction = -1;
             }
+
             if (direction == 1)
             {
                 if (roundsBuy == 0)
@@ -106,34 +135,41 @@ public class TradeStats
                     startFiboPrice = maxPriceBelief;
                 roundsNoBuy++;
 
-                minPriceBelief = lastBuyAttempPrice;
+                //int nextBuyAttempPrice = lastBuyAttempPrice + Mathf.Max(1, Mathf.RoundToInt(lastBuyAttempPrice * nextAttemptPriceMultiplier));
+                minPriceBelief = lastBuyAttempPrice + 1;
                 maxPriceBelief = startFiboPrice + Mathf.RoundToInt((GetFibonacciMultiplier(roundsNoBuy) * startFiboPrice) / 100f);
 
                 roundsBuy = 0;
             }
-            else
-            {
-                roundsBuy = 0;
-                roundsNoBuy = 0;
-                int priceWindow = Mathf.RoundToInt((maxPriceBelief - minPriceBelief) * direction * 3f / 100);
-                maxPriceBelief += priceWindow;
-                minPriceBelief += priceWindow;
-            }
+            //else
+            //{
+            //    roundsBuy = 0;
+            //    roundsNoBuy = 0;
+            //    int priceWindow = Mathf.RoundToInt((maxPriceBelief - minPriceBelief) * direction * 3f / 100);
+            //    maxPriceBelief += priceWindow;
+            //    minPriceBelief += priceWindow;
+            //}
         }
 
 
         minPriceBelief = Mathf.Max(minPriceBelief, 0);
-        maxPriceBelief = Mathf.Max(maxPriceBelief, 0);
-        Assert.IsTrue(minPriceBelief <= maxPriceBelief, $"{round} {agentName} {itemName} minP: {minPriceBelief} maxP: {maxPriceBelief}");
+        Assert.IsTrue(minPriceBelief <= maxPriceBelief, $"{round} {agentName} {itemName} ({minPriceBelief}-{maxPriceBelief})");
+
+        string change = prevMaxPriceBelief < maxPriceBelief ? "↗" : "↘";
+        if (itemName == "Food")
+            Debug.Log($"r={round} Buyer {agentName} ({prevMinPriceBelief}-{prevMaxPriceBelief}){change}({minPriceBelief}-{maxPriceBelief}) B({boughtQty})");
     }
-    public void UpdateSellerPriceBelief(int round, string agentName, string itemName, int soldQty, int unSoldQty, int lastSellAttempPrice, int itemCost, int lastSoldPrice)
+    public void UpdateSellerPriceBelief(int round, string agentName, string itemName, int soldQty, int unSoldQty, int lastSellAttempPrice, int itemCost, int lastSoldPrice, int prodRate)
     {
         this.lastSellAttempPrice = lastSellAttempPrice;
+        var prevMinPriceBelief = minPriceBelief;
+        var prevMaxPriceBelief = maxPriceBelief;
 
         if (lastSoldPrice == 0)
             lastSoldPrice = GetLatestSoldPrice();
         this.lastSoldPrice = lastSoldPrice;
 
+        float avgSold = GetAvgSoldQty(10);
         if (lastSoldPrice == 0)
         {
             maxPriceBelief = lastSellAttempPrice;
@@ -141,11 +177,29 @@ public class TradeStats
         else
         {
             float direction = 0;
-            if (unSoldQty != 0 && soldQty != 0)
-            {
-                direction = (soldQty - unSoldQty) / (float)(soldQty + unSoldQty);
-            }
-            else if (unSoldQty == 0)
+            //if (unSoldQty != 0 && soldQty != 0)
+            //{
+            //    direction = (soldQty - unSoldQty) / (float)(soldQty + unSoldQty);
+            //}
+            //else if (unSoldQty == 0)
+            //{
+            //    direction = 1;
+            //}
+            //else
+            //{
+            //    direction = -1;
+            //}
+
+            //if(soldQty != 0)
+            //{
+            //    direction = 1;
+            //}
+            //else
+            //{
+            //    direction = -1;
+            //}
+
+            if (avgSold >= prodRate)
             {
                 direction = 1;
             }
@@ -161,7 +215,9 @@ public class TradeStats
                 roundsSale++;
 
                 maxPriceBelief = startFiboPrice + Mathf.RoundToInt((GetFibonacciMultiplier(roundsSale) * startFiboPrice) / 100f);
-                minPriceBelief = lastSoldPrice;
+
+                //int nextSellAttempPrice = lastSoldPrice + Mathf.Max(1, Mathf.RoundToInt(lastSoldPrice * nextAttemptPriceMultiplier));
+                minPriceBelief = lastSoldPrice + 1;
 
                 roundsNoSale = 0;
             }
@@ -175,95 +231,86 @@ public class TradeStats
                 maxPriceBelief = lastSellAttempPrice;
                 roundsSale = 0;
             }
-            else
-            {
-                roundsSale = 0;
-                roundsNoSale = 0;
-                int priceWindow = Mathf.RoundToInt((maxPriceBelief - minPriceBelief) * direction * 3f / 100);
-                maxPriceBelief += priceWindow;
-                minPriceBelief += priceWindow;
-            }
+            //else
+            //{
+            //    roundsSale = 0;
+            //    roundsNoSale = 0;
+            //    int priceWindow = Mathf.RoundToInt((maxPriceBelief - minPriceBelief) * direction * 3f / 100);
+            //    maxPriceBelief += priceWindow;
+            //    minPriceBelief += priceWindow;
+            //}
         }
 
         minPriceBelief = Mathf.Max(minPriceBelief, itemCost);
-        Assert.IsTrue(minPriceBelief <= maxPriceBelief, $"{round} {agentName} {itemName} minP: {minPriceBelief} maxP: {maxPriceBelief}");
+        maxPriceBelief = Mathf.Max(maxPriceBelief, itemCost);
+        Assert.IsTrue(minPriceBelief <= maxPriceBelief, $"{round} {agentName} {itemName} ({minPriceBelief}-{maxPriceBelief})");
+
+        string change = prevMaxPriceBelief < maxPriceBelief ? "↗" : "↘";
+        if (itemName == "Food")
+            Debug.Log($"r={round} Seller {agentName} ({prevMinPriceBelief}-{prevMaxPriceBelief}){change}({minPriceBelief}-{maxPriceBelief}) S({avgSold})");
     }
 
     private int GetFibonacciMultiplier(int index)
     {
-        index = Mathf.Clamp(index, 0, fibonacciSeq.Length - 1);
-        return fibonacciSeq[index];
+        if (index >= fibonacciSeq.Length)
+        {
+            int result = fibonacciSeq[fibonacciSeq.Length - 1];
+            int lefIndex = index - fibonacciSeq.Length;
+            result += lefIndex * fibonacciSeq[fibonacciSeq.Length - 1];
+            return result;
+        }
+        else
+            return fibonacciSeq[index];
     }
 
     internal int GetLowestBuyPrice()
     {
-        if (TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Count() == 0)
-            return 1;
+        if (BuyRecords.Count() == 0)
+            return 0;
 
-        return TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Select(x => x.Price).Min();
+        return BuyRecords.Select(x => x.Price).Min();
     }
 
     internal int GetHighestBuyPrice()
     {
-        if (TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Count() == 0)
-            return 1;
+        if (BuyRecords.Count() == 0)
+            return 0;
 
-        return TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Select(x => x.Price).Max();
+        return BuyRecords.Select(x => x.Price).Max();
     }
 
     internal int GetLatestBoughtPrice()
     {
-        if (TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Count() == 0)
-            return 1;
+        if (BuyRecords.Where(x => x.Qty > 0).Count() == 0)
+            return 0;
 
-        return TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Select(x => x.Price).Last();
-    }
-
-    internal int GetLowestSoldPrice()
-    {
-        if (TradeRecords.Where(x => x.TransactionType == TransactionType.Sell).Count() == 0)
-            return 1;
-
-        return TradeRecords.Where(x => x.TransactionType == TransactionType.Sell).Select(x => x.Price).Min();
-    }
-
-    internal int GetHighestSoldPrice()
-    {
-        if (TradeRecords.Where(x => x.TransactionType == TransactionType.Sell).Count() == 0)
-            return 1;
-
-        return TradeRecords.Where(x => x.TransactionType == TransactionType.Sell).Select(x => x.Price).Max();
+        return BuyRecords.Where(x => x.Qty > 0).Select(x => x.Price).Last();
     }
 
     internal int GetLatestSoldPrice()
     {
-        if (TradeRecords.Where(x => x.TransactionType == TransactionType.Sell).Count() == 0)
+        if (SellRecords.Where(x => x.Qty > 0).Count() == 0)
             return 0;
 
-        return TradeRecords.Where(x => x.TransactionType == TransactionType.Sell).Select(x => x.Price).Last();
+        return SellRecords.Where(x => x.Qty > 0).Select(x => x.Price).Last();
     }
 
     internal int GetAvgBuyPrice(int historySize)
     {
-        if (TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Count() == 0)
-            return 1;
-
-        return (int)TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Skip(Mathf.Max(0, TradeRecords.Count - historySize)).Average(x => x.Price);
-    }
-
-    internal int GetLastSoldDay()
-    {
-        if (TradeRecords.Where(x => x.TransactionType == TransactionType.Sell).Count() == 0)
+        if (BuyRecords.Count() == 0)
             return 0;
 
-        return TradeRecords.Where(x => x.TransactionType == TransactionType.Sell).Last().Round;
+        return (int)BuyRecords.Skip(Mathf.Max(0, BuyRecords.Count - historySize)).Average(x => x.Price);
     }
 
-    internal int GetLastBoughtDay()
+    private float GetAvgSoldQty(int v)
     {
-        if (TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Count() == 0)
-            return -1;
+        if (SellRecords.Count == 0)
+            return 0;
+        int takeCount = Mathf.Min(v, SellRecords.Count);
 
-        return TradeRecords.Where(x => x.TransactionType == TransactionType.Buy).Last().Round;
+        var a = SellRecords.Skip(Mathf.Max(0, SellRecords.Count - takeCount)).ToList();
+        var c = a.Sum(x => x.Qty);
+        return (float)c / takeCount;
     }
 }
