@@ -18,12 +18,16 @@ public class AuctionStats : MonoBehaviour
 
     public void AddRecord(Dictionary<string, AuctionRecord> record)
     {
+        if (config == null)
+            config = GetComponent<AgentConfig>();
         foreach (var item in record)
         {
             if (!auctionRecords.ContainsKey(item.Key))
                 auctionRecords.Add(item.Key, new List<AuctionRecord>());
 
             auctionRecords[item.Key].Add(item.Value);
+            if (auctionRecords[item.Key].Count > config.MaxRecordedTransactions)
+                auctionRecords[item.Key].RemoveAt(0);
         }
     }
 

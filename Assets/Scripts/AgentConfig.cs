@@ -26,6 +26,8 @@ public class AgentConfig : MonoBehaviour
     public bool pauseWhenBankrupt = true;
     public int initCost = 100;
 
+    public int MaxRecordedTransactions = 1000;
+
     public List<Commodity> commodities;
 
     [SerializedDictionary("Comm", "numAgents")]

@@ -281,9 +281,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5340b96b9e4f7420e865bd103e760776, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  seed: 32
-  tickInterval: 0.1
-  pauseAtRound: 49
+  seed: 1
+  tickInterval: 0.001
+  pauseAtRound: 0
   initCash: 1000000
   initStock: 0
   capacityPerItem: 10000
@@ -295,9 +295,10 @@ MonoBehaviour:
   profitMarkup: 1.05
   lossMarkup: 1.05
   randomInitStock: 0
-  maxStavationDays: 20
+  maxStavationDays: 80
   pauseWhenBankrupt: 1
   initCost: 100
+  MaxRecordedTransactions: 800
   commodities:
   - name: Berry
     recipes:
@@ -324,11 +325,11 @@ MonoBehaviour:
   numAgents:
     _serializedList:
     - Key: Berry
-      Value: 1
+      Value: 3
     - Key: Stick
-      Value: 1
+      Value: 3
     - Key: Food
-      Value: 1
+      Value: 3
 --- !u!114 &194909954
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2460,7 +2461,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8428470423274658307, guid: a1740875a5593b846a99d072ac5b5395, type: 3}
       propertyPath: maxPlot
-      value: 20
+      value: 800
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

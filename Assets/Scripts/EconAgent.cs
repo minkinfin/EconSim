@@ -66,7 +66,7 @@ public class EconAgent : MonoBehaviour
             }
 
             //Inventory.AddItem(com.name, guessCost, com.recipes, 0);
-            TradeStats.Add(com.name, new TradeStats(com.name, guessCost));
+            TradeStats.Add(com.name, new TradeStats(com.name, guessCost, config.MaxRecordedTransactions));
         }
     }
 
@@ -124,10 +124,10 @@ public class EconAgent : MonoBehaviour
             if (com.name == "Food")
                 expecedProducedThisRound[com.name] = Mathf.Max(0, expecedProducedThisRound[com.name] - config.foodConsumptionRate);
 
-            TradeStats[com.name].ProducedRecords.Add(expecedProducedThisRound[com.name]);
+            TradeStats[com.name].AddProducedRecord(expecedProducedThisRound[com.name]);
 
             if (com.name != "Food")
-                TradeStats[com.name].ConsumedRecords.Add(expecedConsumedThisRound[com.name]);
+                TradeStats[com.name].AddConsumedRecord(expecedConsumedThisRound[com.name]);
         }
 
         return (actualProducedThisRound, actualConsumedThisRound);
@@ -153,7 +153,7 @@ public class EconAgent : MonoBehaviour
             consumed["Food"] += consumedThisRound;
         else
             consumed["Food"] = consumedThisRound;
-        TradeStats["Food"].ConsumedRecords.Add(expectedFoodConsumption);
+        TradeStats["Food"].AddConsumedRecord(expectedFoodConsumption);
 
         return consumed;
     }
