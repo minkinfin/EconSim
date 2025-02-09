@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using UnityEngine;
 
 [Serializable]
@@ -9,6 +10,7 @@ public class TradeStats
 {
     public int minPriceBelief;
     public int maxPriceBelief;
+    public int priceBelief;
 
     public string itemName;
     public int lastBuyAttempPrice;
@@ -27,17 +29,21 @@ public class TradeStats
     private List<TradeRecord> BuyRecords { get; set; }
     private List<TradeRecord> SellRecords { get; set; }
 
+    public List<int> ProducedRecords { get; set; }
+    public List<int> ConsumedRecords { get; set; }
 
-    public TradeStats(string itemName, int priceBelief)
+    public TradeStats(string itemName, int _priceBelief)
     {
         //Assert.IsTrue(_meanPrice >= 0); //TODO really should never be 0???
-        minPriceBelief = priceBelief;
-        maxPriceBelief = priceBelief * 2;
+        minPriceBelief = (int)(_priceBelief * 1.5f);
+        maxPriceBelief = _priceBelief * 2;
+        priceBelief = UnityEngine.Random.Range(minPriceBelief + 1, maxPriceBelief);
 
         this.itemName = itemName;
         BuyRecords = new List<TradeRecord>();
         SellRecords = new List<TradeRecord>();
-
+        ProducedRecords = new List<int>();
+        ConsumedRecords = new List<int>();
     }
 
     public void AddBuyRecord(int price, int qty, int round)
@@ -52,7 +58,6 @@ public class TradeStats
 
         BuyRecords.Add(record);
     }
-
     public void AddSellRecord(int price, int qty, int round)
     {
         var record = new TradeRecord()
@@ -78,176 +83,120 @@ public class TradeStats
     //    consecutiveRoundsWithoutBuy = Mathf.Max(0, consecutiveRoundsWithoutBuy);
     //}
 
-    public void UpdateBuyerPriceBelief(int round, string agentName, string itemName, int boughtQty, int unBoughtQty, int lastBuyAttempPrice, int lastBoughtPrice)
+    public int UpdateBuyerPriceBelief(string itemName, int lastBuyAttempPrice, int boughtQty)
     {
         this.lastBuyAttempPrice = lastBuyAttempPrice;
         var prevMinPriceBelief = minPriceBelief;
         var prevMaxPriceBelief = maxPriceBelief;
 
-        if (lastBoughtPrice == 0)
+        int lastBoughtPrice = 0;
+        if (boughtQty > 0)
+            lastBoughtPrice = lastBuyAttempPrice;
+        else
             lastBoughtPrice = GetLatestBoughtPrice();
         this.lastBoughtPrice = lastBoughtPrice;
 
-        if (lastBoughtPrice == 0)
+        float avgBought = GetAvgBoughtQty(20);
+        float consumptionRate = GetConsumptionRate(20);
+        float boughtBufferDays = GetBoughtBufferDays(20);
+        bool cond = avgBought >= consumptionRate || boughtBufferDays >= 1;
+        if (priceBelief == 0)
         {
-            maxPriceBelief = lastBuyAttempPrice + (maxPriceBelief - minPriceBelief);
-            minPriceBelief = lastBuyAttempPrice;
+            //maxPriceBelief = lastBuyAttempPrice + (maxPriceBelief - minPriceBelief);
+            minPriceBelief = UnityEngine.Random.Range(minPriceBelief + 1, maxPriceBelief);
+            maxPriceBelief = maxPriceBelief + (minPriceBelief - prevMinPriceBelief);
+            priceBelief = minPriceBelief;
         }
         else
         {
-            float direction = 0;
-            //if (unBoughtQty != 0 && boughtQty != 0)
-            //{
-            //    direction = (boughtQty - unBoughtQty) / (float)(boughtQty + unBoughtQty);
-            //}
-            //else if (unBoughtQty == 0)
-            //{
-            //    direction = 1;
-            //}
-            //else
-            //{
-            //    direction = -1;
-            //}
-
-            if (boughtQty != 0)
-            {
-                direction = 1;
-            }
-            else
-            {
-                direction = -1;
-            }
-
-            if (direction == 1)
+            if (boughtQty > 0 && cond)
             {
                 if (roundsBuy == 0)
-                    startFiboPrice = minPriceBelief;
+                    startFiboPrice = priceBelief;
+
+                priceBelief = startFiboPrice - Mathf.FloorToInt((GetFibonacciMultiplier(roundsBuy) * startFiboPrice) / 100f);// + 1;
+                //maxPriceBelief = lastBoughtPrice;
+                //maxPriceBelief = startFiboPrice;
                 roundsBuy++;
-
-                minPriceBelief = startFiboPrice - Mathf.RoundToInt((GetFibonacciMultiplier(roundsBuy) * startFiboPrice) / 100f);
-                maxPriceBelief = lastBoughtPrice;
-
                 roundsNoBuy = 0;
             }
-            else if (direction == -1)
+            else if (boughtQty == 0 && !cond)
             {
                 if (roundsNoBuy == 0)
-                    startFiboPrice = maxPriceBelief;
+                    startFiboPrice = priceBelief;
+
+                //minPriceBelief = lastBuyAttempPrice + 1;
+                //minPriceBelief = startFiboPrice;
+                priceBelief = startFiboPrice + Mathf.FloorToInt((GetFibonacciMultiplier(roundsNoBuy) * startFiboPrice) / 100f);// - 1;
                 roundsNoBuy++;
-
-                //int nextBuyAttempPrice = lastBuyAttempPrice + Mathf.Max(1, Mathf.RoundToInt(lastBuyAttempPrice * nextAttemptPriceMultiplier));
-                minPriceBelief = lastBuyAttempPrice + 1;
-                maxPriceBelief = startFiboPrice + Mathf.RoundToInt((GetFibonacciMultiplier(roundsNoBuy) * startFiboPrice) / 100f);
-
                 roundsBuy = 0;
             }
-            //else
-            //{
-            //    roundsBuy = 0;
-            //    roundsNoBuy = 0;
-            //    int priceWindow = Mathf.RoundToInt((maxPriceBelief - minPriceBelief) * direction * 3f / 100);
-            //    maxPriceBelief += priceWindow;
-            //    minPriceBelief += priceWindow;
-            //}
         }
 
-
         minPriceBelief = Mathf.Max(minPriceBelief, 0);
-        Assert.IsTrue(minPriceBelief <= maxPriceBelief, $"{round} {agentName} {itemName} ({minPriceBelief}-{maxPriceBelief})");
+        priceBelief = Mathf.Max(priceBelief, 0);
+        //Assert.IsTrue(minPriceBelief <= maxPriceBelief, $"Buyer {itemName} ({minPriceBelief}-{maxPriceBelief})");
 
-        string change = prevMaxPriceBelief < maxPriceBelief ? "↗" : "↘";
-        if (itemName == "Food")
-            Debug.Log($"r={round} Buyer {agentName} ({prevMinPriceBelief}-{prevMaxPriceBelief}){change}({minPriceBelief}-{maxPriceBelief}) B({boughtQty})");
+        return priceBelief;
     }
-    public void UpdateSellerPriceBelief(int round, string agentName, string itemName, int soldQty, int unSoldQty, int lastSellAttempPrice, int itemCost, int lastSoldPrice, int prodRate)
+    public int UpdateSellerPriceBelief(string itemName, int lastSellAttempPrice, int itemCost, int soldQty)
     {
         this.lastSellAttempPrice = lastSellAttempPrice;
         var prevMinPriceBelief = minPriceBelief;
         var prevMaxPriceBelief = maxPriceBelief;
 
-        if (lastSoldPrice == 0)
+        int lastSoldPrice = 0;
+        if (soldQty > 0)
+            lastSoldPrice = lastSellAttempPrice;
+        else
             lastSoldPrice = GetLatestSoldPrice();
         this.lastSoldPrice = lastSoldPrice;
 
-        float avgSold = GetAvgSoldQty(10);
-        if (lastSoldPrice == 0)
+        float avgSold = GetAvgSoldQty(20);
+        float prodRate = GetProductionRate(20);
+        float soldBufferDays = GetSoldBufferDays(20);
+        bool cond = avgSold >= prodRate || soldBufferDays >= 1;
+        if (priceBelief == 0)
         {
-            maxPriceBelief = lastSellAttempPrice;
+            maxPriceBelief = UnityEngine.Random.Range(minPriceBelief, maxPriceBelief);
+            priceBelief = maxPriceBelief;
         }
         else
         {
-            float direction = 0;
-            //if (unSoldQty != 0 && soldQty != 0)
-            //{
-            //    direction = (soldQty - unSoldQty) / (float)(soldQty + unSoldQty);
-            //}
-            //else if (unSoldQty == 0)
-            //{
-            //    direction = 1;
-            //}
-            //else
-            //{
-            //    direction = -1;
-            //}
-
-            //if(soldQty != 0)
-            //{
-            //    direction = 1;
-            //}
-            //else
-            //{
-            //    direction = -1;
-            //}
-
-            if (avgSold >= prodRate)
-            {
-                direction = 1;
-            }
-            else
-            {
-                direction = -1;
-            }
-
-            if (direction == 1)
+            if (soldQty > 0 && cond)
             {
                 if (roundsSale == 0)
-                    startFiboPrice = maxPriceBelief;
+                    startFiboPrice = priceBelief;
+
+                priceBelief = startFiboPrice + Mathf.FloorToInt((GetFibonacciMultiplier(roundsSale) * startFiboPrice) / 100f);// - 1;
+                //minPriceBelief = lastSoldPrice + 1;
+                //minPriceBelief = startFiboPrice;
                 roundsSale++;
-
-                maxPriceBelief = startFiboPrice + Mathf.RoundToInt((GetFibonacciMultiplier(roundsSale) * startFiboPrice) / 100f);
-
-                //int nextSellAttempPrice = lastSoldPrice + Mathf.Max(1, Mathf.RoundToInt(lastSoldPrice * nextAttemptPriceMultiplier));
-                minPriceBelief = lastSoldPrice + 1;
-
                 roundsNoSale = 0;
             }
-            else if (direction == -1)
+            else if (soldQty == 0 && !cond)
             {
                 if (roundsNoSale == 0)
-                    startFiboPrice = minPriceBelief;
-                roundsNoSale++;
+                    startFiboPrice = priceBelief;
 
-                minPriceBelief = startFiboPrice - Mathf.RoundToInt((GetFibonacciMultiplier(roundsNoSale) * startFiboPrice) / 100f);
-                maxPriceBelief = lastSellAttempPrice;
+                priceBelief = startFiboPrice - Mathf.FloorToInt((GetFibonacciMultiplier(roundsNoSale) * startFiboPrice) / 100f);// + 1;
+                //maxPriceBelief = lastSellAttempPrice;
+                //maxPriceBelief = startFiboPrice;
+                roundsNoSale++;
                 roundsSale = 0;
             }
-            //else
-            //{
-            //    roundsSale = 0;
-            //    roundsNoSale = 0;
-            //    int priceWindow = Mathf.RoundToInt((maxPriceBelief - minPriceBelief) * direction * 3f / 100);
-            //    maxPriceBelief += priceWindow;
-            //    minPriceBelief += priceWindow;
-            //}
         }
 
-        minPriceBelief = Mathf.Max(minPriceBelief, itemCost);
-        maxPriceBelief = Mathf.Max(maxPriceBelief, itemCost);
-        Assert.IsTrue(minPriceBelief <= maxPriceBelief, $"{round} {agentName} {itemName} ({minPriceBelief}-{maxPriceBelief})");
+        //minPriceBelief = Mathf.Max(minPriceBelief, itemCost);
+        //maxPriceBelief = Mathf.Max(maxPriceBelief, itemCost);
+        //if (minPriceBelief == maxPriceBelief)
+        //{
+        //    maxPriceBelief = maxPriceBelief + 1;
+        //}
+        //Assert.IsTrue(minPriceBelief <= maxPriceBelief, $"Seller {itemName} ({minPriceBelief}-{maxPriceBelief})");
+        priceBelief = Mathf.Max(priceBelief, itemCost);
 
-        string change = prevMaxPriceBelief < maxPriceBelief ? "↗" : "↘";
-        if (itemName == "Food")
-            Debug.Log($"r={round} Seller {agentName} ({prevMinPriceBelief}-{prevMaxPriceBelief}){change}({minPriceBelief}-{maxPriceBelief}) S({avgSold})");
+        return priceBelief;
     }
 
     private int GetFibonacciMultiplier(int index)
@@ -303,14 +252,105 @@ public class TradeStats
         return (int)BuyRecords.Skip(Mathf.Max(0, BuyRecords.Count - historySize)).Average(x => x.Price);
     }
 
-    private float GetAvgSoldQty(int v)
+    public float GetAvgSoldQty(int n)
     {
-        if (SellRecords.Count == 0)
+        int takeCount = Mathf.Min(n, SellRecords.Count);
+        if (takeCount == 0)
             return 0;
-        int takeCount = Mathf.Min(v, SellRecords.Count);
 
         var a = SellRecords.Skip(Mathf.Max(0, SellRecords.Count - takeCount)).ToList();
-        var c = a.Sum(x => x.Qty);
+
+        float c = a.Sum(x => x.Qty);
+        return c / takeCount;
+    }
+    public float GetAvgBoughtQty(int n)
+    {
+        int takeCount = Mathf.Min(n, BuyRecords.Count);
+        if (takeCount == 0)
+            return 0;
+
+        var a = BuyRecords.Skip(Mathf.Max(0, BuyRecords.Count - takeCount)).ToList();
+        float c = a.Sum(x => x.Qty);
+        return c / takeCount;
+    }
+
+    //public float GetAvgSoldQty(int n)
+    //{
+    //    int takeCount = Mathf.Min(n, SellRecords.Count);
+    //    if (takeCount == 0)
+    //        return 0;
+
+    //    var a = SellRecords.Skip(Mathf.Max(0, SellRecords.Count - takeCount)).ToList();
+    //    var b = a.Where(x => x.Qty == a.Max(x => x.Qty)).LastOrDefault();
+    //    if (b == null)
+    //        return 0;
+    //    if (b.Qty == 0)
+    //        return 0;
+
+    //    a = a.Where(x => x.Round >= b.Round).ToList();
+    //    return b.Qty / (float)a.Count;
+    //}
+    //public float GetAvgBoughtQty(int n)
+    //{
+    //    int takeCount = Mathf.Min(n, BuyRecords.Count);
+    //    if (takeCount == 0)
+    //        return 0;
+
+    //    var a = BuyRecords.Skip(Mathf.Max(0, BuyRecords.Count - takeCount)).ToList();
+    //    var b = a.Where(x => x.Qty == a.Max(x => x.Qty)).LastOrDefault();
+    //    if (b == null)
+    //        return 0;
+    //    if (b.Qty == 0)
+    //        return 0;
+
+    //    a = a.Where(x => x.Round >= b.Round).ToList();
+    //    return b.Qty / (float)a.Count;
+    //}
+
+    public float GetSoldBufferDays(int n)
+    {
+        int takeCount = Mathf.Min(n, SellRecords.Count);
+        if (takeCount == 0)
+            return 0;
+
+        var a = SellRecords.Skip(Mathf.Max(0, SellRecords.Count - takeCount)).ToList();
+        float prodRate = GetProductionRate(n);
+        int lastRound = a.Last().Round;
+        return a.Select(x => Mathf.Max(0, (x.Qty / prodRate) - (lastRound - x.Round))).Sum();
+    }
+    public float GetBoughtBufferDays(int n)
+    {
+        int takeCount = Mathf.Min(n, BuyRecords.Count);
+        if (takeCount == 0)
+            return 0;
+
+        var a = BuyRecords.Skip(Mathf.Max(0, BuyRecords.Count - takeCount)).ToList();
+        float consumedRate = GetConsumptionRate(n);
+        int lastRound = a.Last().Round;
+        return a.Select(x => Mathf.Max(0, (x.Qty / consumedRate) - (lastRound - x.Round))).Sum();
+    }
+
+    internal float GetProductionRate(int n)
+    {
+        if (ProducedRecords.Count == 0)
+            return 0;
+        int takeCount = Mathf.Min(n, ProducedRecords.Count);
+        var a = ProducedRecords.Skip(Mathf.Max(0, ProducedRecords.Count - takeCount)).ToList();
+        var c = a.Sum();
         return (float)c / takeCount;
+    }
+    internal float GetConsumptionRate(int n)
+    {
+        if (ConsumedRecords.Count == 0)
+            return 0;
+        int takeCount = Mathf.Min(n, ConsumedRecords.Count);
+        var a = ConsumedRecords.Skip(Mathf.Max(0, ConsumedRecords.Count - takeCount)).ToList();
+        var c = a.Sum();
+        return (float)c / takeCount;
+    }
+
+    internal int GetPriceBelief()
+    {
+        return priceBelief;
     }
 }

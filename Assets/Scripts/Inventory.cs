@@ -16,17 +16,23 @@ public class Inventory
         this.config = config;
     }
 
-    internal void AddItem(string name, int cost, int prodRate, int amount = 1)
+    internal void AddItem(string name, int cost, int amount = 1)
     {
+        if (amount <= 0)
+            return;
+
         for (int i = 0; i < amount; i++)
         {
-            Item item = new Item(name, cost, prodRate);
+            Item item = new Item(name, cost);
             Items.Add(item);
         }
     }
 
     internal List<Item> TakeItems(string name, int amount)
     {
+        if(amount <= 0)
+            return new List<Item>();
+
         List<Item> items = GetItems(name);
         List<Item> takenItems = items.Take(amount).ToList();
         Items = Items.Where(x => !takenItems.Select(y => y.Id).Contains(x.Id)).ToList();

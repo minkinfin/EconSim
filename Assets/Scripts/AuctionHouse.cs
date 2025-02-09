@@ -1,10 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using UnityEngine;
 using AYellowpaper.SerializedCollections;
-using TMPro;
 using UnityEngine.UI;
 
 public class AuctionHouse : MonoBehaviour
@@ -98,7 +96,7 @@ public class AuctionHouse : MonoBehaviour
             lastTick = Time.time;
         }
 
-        if (round == config.pauseAtRound)
+        if (round == config.pauseAtRound - 1)
             toggle.isOn = false;
     }
     public void Tick()
@@ -121,10 +119,6 @@ public class AuctionHouse : MonoBehaviour
         foreach (EconAgent agent in agents)
         {
             (var producedThisRound, var consumedThisRound) = agent.Produce();
-            foreach (var entry in producedThisRound)
-            {
-                totalProducedThisRound[entry.Key] += entry.Value;
-            }
 
             var agentOffers = agent.CreateOffers();
             var agentBids = agent.CreateBids();
@@ -192,6 +186,17 @@ public class AuctionHouse : MonoBehaviour
         int moneyExchangedThisRound = 0;
         int goodsExchangedThisRound = 0;
 
+        if (offers.Count == 0)
+        {
+            if (itemName == "Food")
+                Debug.Log($"<color=#aa0000>r=</color>{round} {itemName} offers=0");
+        }
+        if (bids.Count == 0)
+        {
+            if (itemName == "Food")
+                Debug.Log($"<color=#aa0000>r=</color>{round} {itemName} bids=0");
+        }
+
         for (int i = 0; i < offers.Count; i++)
         {
             var offer = offers[i];
@@ -237,45 +242,74 @@ public class AuctionHouse : MonoBehaviour
 
         foreach (var offer in offers)
         {
-            offer.agent.TradeStats[itemName].AddSellRecord(offer.Price, offer.Qty - offer.RemainingQty, round);
-        }
-        foreach (var bid in bids)
-        {
-            bid.agent.TradeStats[itemName].AddBuyRecord(bid.Price, bid.Qty - bid.RemainingQty, round);
-        }
+            var agent = offer.agent;
+            var tradeStats = agent.TradeStats[itemName];
+            tradeStats.AddSellRecord(offer.Price, offer.Qty - offer.RemainingQty, round);
 
-        var offerInfos = offers.GroupBy(x => x.agent.name).Select(x => new
-        {
-            AgentName = x.Key,
-            SoldQty = x.Sum(y => y.Qty) - x.Sum(y => y.RemainingQty),
-            UnSoldQty = x.Sum(y => y.RemainingQty),
-            lastOfferAttempPrice = x.Last().Price,
-            lastSoldPrice = x.Any(y => y.RemainingQty == 0) ? x.Last(x => x.RemainingQty == 0).Price : 0,
-            AvgCost = (int)x.Average(y => y.Cost),
-            ProdRate = (int)x.SelectMany(y => y.Items.Select(z => z.ProdRate)).Average()
-        }).ToList();
-        foreach (var obj in offerInfos)
-        {
-            var agent = agents.First(x => x.name == obj.AgentName);
-            agent.TradeStats[itemName].UpdateSellerPriceBelief(round, obj.AgentName, itemName, obj.SoldQty, obj.UnSoldQty, obj.lastOfferAttempPrice, obj.AvgCost, obj.lastSoldPrice, obj.ProdRate);
+            int prevPriceBelief = tradeStats.GetPriceBelief();
+            int priceBelief = tradeStats.UpdateSellerPriceBelief(itemName, offer.Price, offer.Cost, offer.Qty - offer.RemainingQty);
+
+            string symb = prevPriceBelief < priceBelief ? "↗" : (prevPriceBelief > priceBelief ? "↘" : "=");
+            float avgSold = tradeStats.GetAvgSoldQty(20);
+            float soldBufferDay = tradeStats.GetSoldBufferDays(20);
+            if (itemName == "Food")
+                Debug.Log($"r={round} Seller {agent.name} ({prevPriceBelief}){symb}({priceBelief}) {avgSold.ToString("F")} {soldBufferDay.ToString("F")}");
         }
         offers.Clear();
 
-        var bidInfos = bids.GroupBy(x => x.agent.name).Select(x => new
+        foreach (var bid in bids)
         {
-            AgentName = x.Key,
-            BoughtQty = x.Sum(y => y.Qty) - x.Sum(y => y.RemainingQty),
-            UnBoughtQty = x.Sum(y => y.RemainingQty),
-            lastBidAttempPrice = x.Max(y => y.Price),
-            lastBoughtPrice = x.Where(y => y.IsMatched).Any() ? x.Where(y => y.IsMatched).Last().Price : 0
-        }).ToList();
-        foreach (var bidInfo in bidInfos)
-        {
-            var agent = agents.First(x => x.name == bidInfo.AgentName);
-            agent.TradeStats[itemName].UpdateBuyerPriceBelief(round, bidInfo.AgentName, itemName, bidInfo.BoughtQty, bidInfo.UnBoughtQty, bidInfo.lastBidAttempPrice, bidInfo.lastBoughtPrice);
-        }
+            var agent = bid.agent;
+            var tradeStats = agent.TradeStats[itemName];
+            tradeStats.AddBuyRecord(bid.Price, bid.Qty - bid.RemainingQty, round);
 
+            int prevPriceBelief = tradeStats.GetPriceBelief();
+            int priceBelief = tradeStats.UpdateBuyerPriceBelief(itemName, bid.Price, bid.Qty - bid.RemainingQty);
+            float avgBought = tradeStats.GetAvgBoughtQty(20);
+            float boughtBufferDay = tradeStats.GetBoughtBufferDays(20);
+            string symb = prevPriceBelief < priceBelief ? "↗" : (prevPriceBelief > priceBelief ? "↘" : "=");
+            if (itemName == "Food")
+                Debug.Log($"r={round} Buyer {agent.name} ({prevPriceBelief}){symb}({priceBelief}) {avgBought.ToString("F")} {boughtBufferDay.ToString("F")}");
+        }
         bids.Clear();
+
+        //var offerInfos = offers.GroupBy(x => x.agent.name).Select(x => new
+        //{
+        //    AgentName = x.Key,
+        //    lastOfferAttempPrice = x.Last().Price,
+        //    lastSoldPrice = x.Any(y => y.RemainingQty == 0) ? x.Last(x => x.RemainingQty == 0).Price : 0,
+        //    AvgCost = (int)x.Average(y => y.Cost)
+        //}).ToList();
+        //foreach (var obj in offerInfos)
+        //{
+        //    var agent = agents.First(x => x.name == obj.AgentName);
+        //    (int prevMinPB, int prevMaxPB) = agent.TradeStats[itemName].GetPriceBelief();
+        //    (int minPB, int maxPB) = agent.TradeStats[itemName].UpdateSellerPriceBelief(obj.lastOfferAttempPrice, obj.AvgCost, obj.lastSoldPrice);
+        //    string symb = prevMaxPB < maxPB ? "↗" : "↘";
+        //    float avgSold = agent.TradeStats[itemName].GetAvgSoldQty(20);
+        //    if (itemName == "Stick")
+        //        Debug.Log($"r={round} Seller {obj.AgentName} ({prevMinPB}-{prevMaxPB}){symb}({minPB}-{maxPB}) ({minPB - prevMinPB}, {maxPB - prevMaxPB}) {avgSold.ToString("F")}");
+        //}
+        //offers.Clear();
+
+        //var bidInfos = bids.GroupBy(x => x.agent.name).Select(x => new
+        //{
+        //    AgentName = x.Key,
+        //    lastBidAttempPrice = x.Max(y => y.Price),
+        //    lastBoughtPrice = x.Where(y => y.IsMatched).Any() ? x.Where(y => y.IsMatched).Last().Price : 0
+        //}).ToList();
+        //foreach (var bidInfo in bidInfos)
+        //{
+        //    var agent = agents.First(x => x.name == bidInfo.AgentName);
+        //    (int prevMinPB, int prevMaxPB) = agent.TradeStats[itemName].GetPriceBelief();
+        //    (int minPB, int maxPB) = agent.TradeStats[itemName].UpdateBuyerPriceBelief(bidInfo.lastBidAttempPrice, bidInfo.lastBoughtPrice);
+        //    float avgBought = agent.TradeStats[itemName].GetAvgBoughtQty(20);
+        //    string symb = prevMaxPB < maxPB ? "↗" : "↘";
+        //    if (itemName == "Stick")
+        //        Debug.Log($"r={round} Buyer {bidInfo.AgentName} ({prevMinPB}-{prevMaxPB}){symb}({minPB}-{maxPB}) ({minPB - prevMinPB}, {maxPB - prevMaxPB}) {avgBought.ToString("F")}");
+        //}
+
+        //bids.Clear();
     }
 
     private void ExecuteTrade(Bid bid, Offer offer, int price, int qty)
