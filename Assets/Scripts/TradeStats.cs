@@ -1,7 +1,5 @@
-﻿using NUnit.Framework;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 [Serializable]
@@ -62,8 +60,11 @@ public class TradeStats
         };
 
         BuyRecords.Add(record);
-        if(BuyRecords.Count > maxRecordedTransactions)
+        if (BuyRecords.Count > maxRecordedTransactions)
             BuyRecords.RemoveAt(0);
+
+        if (record.Qty > 0)
+            lastBoughtPrice = record.Price;
     }
     public void AddSellRecord(int price, int qty, int round)
     {
@@ -78,6 +79,9 @@ public class TradeStats
         SellRecords.Add(record);
         if (SellRecords.Count > maxRecordedTransactions)
             SellRecords.RemoveAt(0);
+
+        if (record.Qty > 0)
+            lastSoldPrice = record.Price;
     }
 
     public void AddProducedRecord(int qty)
@@ -112,16 +116,9 @@ public class TradeStats
         var prevMinPriceBelief = minPriceBelief;
         var prevMaxPriceBelief = maxPriceBelief;
 
-        int lastBoughtPrice = 0;
-        if (boughtQty > 0)
-            lastBoughtPrice = lastBuyAttempPrice;
-        else
-            lastBoughtPrice = GetLatestBoughtPrice();
-        this.lastBoughtPrice = lastBoughtPrice;
-
         float avgBought = GetAvgBoughtQty(20);
         float consumptionRate = GetConsumptionRate(20);
-        bool cond = BuyBufferQty >= consumptionRate;
+        bool cond = BuyBufferQty > 0;
         if (priceBelief == 0)
         {
             //maxPriceBelief = lastBuyAttempPrice + (maxPriceBelief - minPriceBelief);
@@ -172,16 +169,9 @@ public class TradeStats
         var prevMinPriceBelief = minPriceBelief;
         var prevMaxPriceBelief = maxPriceBelief;
 
-        int lastSoldPrice = 0;
-        if (soldQty > 0)
-            lastSoldPrice = lastSellAttempPrice;
-        else
-            lastSoldPrice = GetLatestSoldPrice();
-        this.lastSoldPrice = lastSoldPrice;
-
         float avgSold = GetAvgSoldQty(20);
         float prodRate = GetProductionRate(20);
-        bool cond = SellBufferQty >= prodRate;
+        bool cond = SellBufferQty > 0;
         if (priceBelief == 0)
         {
             maxPriceBelief = UnityEngine.Random.Range(minPriceBelief, maxPriceBelief);
@@ -243,56 +233,18 @@ public class TradeStats
             return fibonacciSeq[index];
     }
 
-    internal int GetLowestBuyPrice()
-    {
-        if (BuyRecords.Count() == 0)
-            return 0;
-
-        return BuyRecords.Select(x => x.Price).Min();
-    }
-
-    internal int GetHighestBuyPrice()
-    {
-        if (BuyRecords.Count() == 0)
-            return 0;
-
-        return BuyRecords.Select(x => x.Price).Max();
-    }
-
-    internal int GetLatestBoughtPrice()
-    {
-        if (BuyRecords.Where(x => x.Qty > 0).Count() == 0)
-            return 0;
-
-        return BuyRecords.Where(x => x.Qty > 0).Select(x => x.Price).Last();
-    }
-
-    internal int GetLatestSoldPrice()
-    {
-        if (SellRecords.Where(x => x.Qty > 0).Count() == 0)
-            return 0;
-
-        return SellRecords.Where(x => x.Qty > 0).Select(x => x.Price).Last();
-    }
-
-    internal int GetAvgBuyPrice(int historySize)
-    {
-        if (BuyRecords.Count() == 0)
-            return 0;
-
-        return (int)BuyRecords.Skip(Mathf.Max(0, BuyRecords.Count - historySize)).Average(x => x.Price);
-    }
-
     public float GetAvgSoldQty(int n)
     {
         int takeCount = Mathf.Min(n, SellRecords.Count);
         if (takeCount == 0)
             return 0;
 
-        var a = SellRecords.Skip(Mathf.Max(0, SellRecords.Count - takeCount)).ToList();
-
-        float c = a.Sum(x => x.Qty);
-        return c / takeCount;
+        float sumqty = 0;
+        for (int i = SellRecords.Count - 1; i >= SellRecords.Count - takeCount; i--)
+        {
+            sumqty += SellRecords[i].Qty;
+        }
+        return sumqty / takeCount;
     }
     public float GetAvgBoughtQty(int n)
     {
@@ -300,9 +252,12 @@ public class TradeStats
         if (takeCount == 0)
             return 0;
 
-        var a = BuyRecords.Skip(Mathf.Max(0, BuyRecords.Count - takeCount)).ToList();
-        float c = a.Sum(x => x.Qty);
-        return c / takeCount;
+        float sumqty = 0;
+        for (int i = BuyRecords.Count - 1; i >= BuyRecords.Count - takeCount; i--)
+        {
+            sumqty += BuyRecords[i].Qty;
+        }
+        return sumqty / takeCount;
     }
 
     //public float GetAvgSoldQty(int n)
@@ -388,21 +343,29 @@ public class TradeStats
 
     internal float GetProductionRate(int n)
     {
-        if (ProducedRecords.Count == 0)
-            return 0;
         int takeCount = Mathf.Min(n, ProducedRecords.Count);
-        var a = ProducedRecords.Skip(Mathf.Max(0, ProducedRecords.Count - takeCount)).ToList();
-        var c = a.Sum();
-        return (float)c / takeCount;
+        if (takeCount <= 0)
+            return 0;
+
+        float sumqty = 0;
+        for (int i = ProducedRecords.Count - 1; i >= ProducedRecords.Count - takeCount; i--)
+        {
+            sumqty += ProducedRecords[i];
+        }
+        return sumqty / takeCount;
     }
     internal float GetConsumptionRate(int n)
     {
-        if (ConsumedRecords.Count == 0)
-            return 0;
         int takeCount = Mathf.Min(n, ConsumedRecords.Count);
-        var a = ConsumedRecords.Skip(Mathf.Max(0, ConsumedRecords.Count - takeCount)).ToList();
-        var c = a.Sum();
-        return (float)c / takeCount;
+        if (takeCount <= 0)
+            return 0;
+
+        float sumqty = 0;
+        for (int i = ConsumedRecords.Count - 1; i >= ConsumedRecords.Count - takeCount; i--)
+        {
+            sumqty += ConsumedRecords[i];
+        }
+        return sumqty / takeCount;
     }
 
     internal int GetPriceBelief()
@@ -415,7 +378,10 @@ public class TradeStats
         float prodRate = GetProductionRate(round);
         if (SellBufferQty > 0)
             SellBufferQty -= prodRate;
-        TradeRecord tradeRecord = SellRecords.LastOrDefault();
+
+        if (SellRecords.Count == 0)
+            return SellBufferQty;
+        TradeRecord tradeRecord = SellRecords[SellRecords.Count - 1];
         if (tradeRecord != null)
             if (tradeRecord.Round == round)
                 SellBufferQty += tradeRecord.Qty;
@@ -428,7 +394,10 @@ public class TradeStats
         float consumedRate = GetConsumptionRate(round);
         if (BuyBufferQty > 0)
             BuyBufferQty -= consumedRate;
-        TradeRecord tradeRecord = BuyRecords.LastOrDefault();
+
+        if (BuyRecords.Count == 0)
+            return BuyBufferQty;
+        TradeRecord tradeRecord = BuyRecords[BuyRecords.Count - 1];
         if (tradeRecord != null)
             if (tradeRecord.Round == round)
                 BuyBufferQty += tradeRecord.Qty;

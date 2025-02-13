@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using AYellowpaper.SerializedCollections;
 using UnityEngine.UI;
@@ -14,8 +13,8 @@ public class AuctionHouse : MonoBehaviour
     public Toggle toggle;
 
     protected List<EconAgent> agents = new List<EconAgent>();
-    protected List<Offer> offerTable;
-    protected List<Bid> bidTable;
+    protected Dictionary<string, List<Offer>> offerTable;
+    protected Dictionary<string, List<Bid>> bidTable;
     protected AuctionStats auctionStats;
     protected float lastTick;
 
@@ -34,29 +33,24 @@ public class AuctionHouse : MonoBehaviour
         round = 0;
 
         lastTick = 0;
-        offerTable = new List<Offer>();
-        bidTable = new List<Bid>();
+        offerTable = new Dictionary<string, List<Offer>>();
+        bidTable = new Dictionary<string, List<Bid>>();
 
         var prefab = Resources.Load("Agent");
 
-        for (int i = transform.childCount; i < numAgents.Values.Sum(); i++)
+        int numAgent = 0;
+        foreach (var obj in numAgents)
         {
-            GameObject go = Instantiate(prefab) as GameObject;
-            go.transform.parent = transform;
-            go.name = "agent" + i.ToString();
-        }
-
-        int agentIndex = 0;
-        var professions = numAgents.Keys;
-        foreach (string profession in professions)
-        {
-            for (int i = 0; i < numAgents[profession]; ++i)
+            for (int i = 0; i < obj.Value; i++)
             {
-                GameObject child = transform.GetChild(agentIndex).gameObject;
-                var agent = child.GetComponent<EconAgent>();
-                InitAgent(agent, profession);
+                GameObject go = Instantiate(prefab) as GameObject;
+                go.transform.parent = transform;
+                go.name = "agent" + numAgent.ToString();
+                var agent = go.GetComponent<EconAgent>();
+                InitAgent(agent, obj.Key);
                 agents.Add(agent);
-                ++agentIndex;
+
+                numAgent++;
             }
         }
 
@@ -104,8 +98,16 @@ public class AuctionHouse : MonoBehaviour
         round++;
         var totalProducedThisRound = new Dictionary<string, int>();
         var totalConsumedThisRound = new Dictionary<string, int>();
-        offerTable = new List<Offer>();
-        bidTable = new List<Bid>();
+        offerTable = new Dictionary<string, List<Offer>>();
+        foreach (var entry in config.commodities)
+        {
+            offerTable.Add(entry.name, new List<Offer>());
+        }
+        bidTable = new Dictionary<string, List<Bid>>();
+        foreach (var entry in config.commodities)
+        {
+            bidTable.Add(entry.name, new List<Bid>());
+        }
         currentAuctionRecord = new Dictionary<string, AuctionRecord>();
 
         foreach (var entry in config.commodities)
@@ -114,16 +116,26 @@ public class AuctionHouse : MonoBehaviour
             totalConsumedThisRound.Add(entry.name, 0);
             currentAuctionRecord.Add(entry.name, new AuctionRecord());
         }
-        agents = agents.Where(x => !x.IsBankrupt).ToList();
+
         //Debug.Log("Round " + round);
         foreach (EconAgent agent in agents)
         {
+            if (agent.IsBankrupt)
+            {
+                continue;
+            }
             (var producedThisRound, var consumedThisRound) = agent.Produce();
 
             var agentOffers = agent.CreateOffers();
             var agentBids = agent.CreateBids();
-            offerTable.AddRange(agentOffers);
-            bidTable.AddRange(agentBids);
+            foreach (var offers in agentOffers)
+            {
+                offerTable[offers.Key].AddRange(offers.Value);
+            }
+            foreach (var bids in agentBids)
+            {
+                bidTable[bids.Key].AddRange(bids.Value);
+            }
 
             foreach (var entry in producedThisRound)
             {
@@ -139,8 +151,8 @@ public class AuctionHouse : MonoBehaviour
 
         foreach (var entry in config.commodities)
         {
-            var itemBids = bidTable.Where(x => x.CommodityName == entry.name).ToList();
-            var itemOffers = offerTable.Where(x => x.CommodityName == entry.name).ToList();
+            var itemBids = bidTable[entry.name];
+            var itemOffers = offerTable[entry.name];
             ResolveOffers(entry.name, itemBids, itemOffers);
         }
 
@@ -183,15 +195,29 @@ public class AuctionHouse : MonoBehaviour
 
     protected void ResolveOffers(string itemName, List<Bid> bids, List<Offer> offers)
     {
-        int totalOfferQty = offers.Sum(offer => offer.Qty);
-        int totalBidQty = bids.Sum(bid => bid.Qty);
+
+        int totalOfferQty = 0;
+        int totalOfferValue = 0;
+        int totalBidQty = 0;
+        int totalBidValue = 0;
+        foreach (var offer in offers)
+        {
+            totalOfferQty += offer.Qty;
+            totalOfferValue += offer.Price * offer.Qty;
+        }
+        foreach (var bid in bids)
+        {
+            totalBidQty += bid.Qty;
+            totalBidValue += bid.Price * bid.Qty;
+        }
         currentAuctionRecord[itemName].Bids = totalBidQty;
         currentAuctionRecord[itemName].Offers = totalOfferQty;
-        currentAuctionRecord[itemName].AvgBidPrice = totalBidQty > 0 ? (bids.Sum((x) => x.Price * x.Qty) / totalBidQty) : 0;
-        currentAuctionRecord[itemName].AvgOfferPrice = totalOfferQty > 0 ? (offers.Sum((x) => x.Price * x.Qty) / totalOfferQty) : 0;
+        currentAuctionRecord[itemName].AvgBidPrice = totalBidQty > 0 ? (totalOfferValue / totalBidQty) : 0;
+        currentAuctionRecord[itemName].AvgOfferPrice = totalOfferQty > 0 ? (totalBidValue / totalOfferQty) : 0;
 
-        offers = offers.OrderBy(x => x.Price).ToList();
-        bids = bids.OrderBy(x => UnityEngine.Random.value).ToList();
+        offers.Sort((x, y) => x.Price.CompareTo(y.Price));
+        //bids.Sort((x, y) => UnityEngine.Random.Range(-1, 2));
+        bids.Sort((x, y) => y.Price.CompareTo(x.Price));
 
         int moneyExchangedThisRound = 0;
         int goodsExchangedThisRound = 0;
@@ -246,8 +272,8 @@ public class AuctionHouse : MonoBehaviour
                 ExecuteTrade(bid, offer, acceptedPrice, acceptedQty);
                 moneyExchangedThisRound += acceptedPrice * acceptedQty;
                 goodsExchangedThisRound += acceptedQty;
-                //if (itemName == "Stick")
-                //    Debug.Log($"<color=#00aa00>r=</color>{round} {itemName}({acceptedQty}) {offer.Price}({offer.agent.name}) {bid.Price}({bid.agent.name}) ");
+                if (itemName == "Food")
+                    Debug.Log($"<color=#00aa00>r=</color>{round} {itemName}({acceptedQty}) {offer.Price}({offer.agent.name}) {bid.Price}({bid.agent.name}) ");
                 bidIndex++;
             }
         }
@@ -258,100 +284,132 @@ public class AuctionHouse : MonoBehaviour
 
         currentAuctionRecord[itemName].ClearingPrice = clearingPrice;
         currentAuctionRecord[itemName].Trades = goodsExchangedThisRound;
-         
-        foreach (var offer in offers)
-        {
-            var agent = offer.agent;
-            var tradeStats = agent.TradeStats[itemName];
-            tradeStats.AddSellRecord(offer.Price, offer.Qty - offer.RemainingQty, round);
-        }
 
-        foreach (var bid in bids)
-        {
-            var agent = bid.agent;
-            var tradeStats = agent.TradeStats[itemName];
-            tradeStats.AddBuyRecord(bid.Price, bid.Qty - bid.RemainingQty, round);
-        }
 
         foreach (var agent in agents)
         {
             var tradeStats = agent.TradeStats[itemName];
+            var offer = offers.Find(x => x.agent == agent);
+            var bid = bids.Find(x => x.agent == agent);
+
+            if (offer != null)
+                tradeStats.AddSellRecord(offer.Price, offer.Qty - offer.RemainingQty, round);
+            if (bid != null)
+                tradeStats.AddBuyRecord(bid.Price, bid.Qty - bid.RemainingQty, round);
+
             float prevSellBufferQty = tradeStats.SellBufferQty;
-            float prevBuyBufferQty = tradeStats.BuyBufferQty;
             float sellBufferQty = tradeStats.UpdateSellBufferQty(round);
+            float prevBuyBufferQty = tradeStats.BuyBufferQty;
             float buyBufferQty = tradeStats.UpdateBuyBufferQty(round);
-            float priceBelief = tradeStats.GetPriceBelief();
-            //if (itemName == "Stick")
-            //    Debug.Log($"r={round} {agent.name} {itemName} {priceBelief} {sellBufferQty.ToString("F")} {buyBufferQty.ToString("F")} ({sellBufferQty - prevSellBufferQty}, {buyBufferQty - prevBuyBufferQty})");
+
+            int prevPriceBelief = 0;
+            int priceBelief = 0;
+            string symb = "=";
+            string role = "";
+            if (offer != null)
+            {
+                prevPriceBelief = tradeStats.GetPriceBelief();
+                priceBelief = tradeStats.UpdateSellerPriceBelief(itemName, offer.Price, offer.Cost, offer.Qty - offer.RemainingQty, round);
+                symb = prevPriceBelief < priceBelief ? "↗" : (prevPriceBelief > priceBelief ? "↘" : "=");
+                role = "Seller";
+                if (itemName == "Food")
+                    Debug.Log($"r={round} {role} {agent.name} {itemName} ({prevPriceBelief}){symb}({priceBelief}) {sellBufferQty}({sellBufferQty - prevSellBufferQty})");
+            }
+            else if (bid != null)
+            {
+                prevPriceBelief = tradeStats.GetPriceBelief();
+                priceBelief = tradeStats.UpdateBuyerPriceBelief(itemName, bid.Price, bid.Qty - bid.RemainingQty, round);
+                symb = prevPriceBelief < priceBelief ? "↗" : (prevPriceBelief > priceBelief ? "↘" : "=");
+                role = "Buyer";
+                if (itemName == "Food")
+                    Debug.Log($"r={round} {role} {agent.name} {itemName} ({prevPriceBelief}){symb}({priceBelief}) {buyBufferQty}({buyBufferQty - prevBuyBufferQty})");
+            }
+            //else
+            //{
+            //    if (prevSellBufferQty > 0)
+            //    {
+            //        role = "Seller";
+            //        if (itemName == "Food")
+            //            Debug.Log($"r={round} {role} {agent.name} {itemName} ({prevPriceBelief}){symb}({priceBelief}) {sellBufferQty}({sellBufferQty - prevSellBufferQty})");
+            //    }
+            //    else if (prevBuyBufferQty > 0)
+            //    {
+            //        role = "Buyer";
+            //        if (itemName == "Food")
+            //            Debug.Log($"r={round} {role} {agent.name} {itemName} ({prevPriceBelief}){symb}({priceBelief}) {buyBufferQty}({buyBufferQty - prevBuyBufferQty})");
+            //    }
+            //    else
+            //    {
+            //        if (itemName == "Food")
+            //            Debug.Log($"r={round} ------ {agent.name} {itemName} ({prevPriceBelief}){symb}({priceBelief}) 0(0)");
+            //    }
+            //}
         }
 
-        foreach (var offer in offers)
-        {
-            var agent = offer.agent;
-            var tradeStats = agent.TradeStats[itemName];
-            int prevPriceBelief = tradeStats.GetPriceBelief();
-            int priceBelief = tradeStats.UpdateSellerPriceBelief(itemName, offer.Price, offer.Cost, offer.Qty - offer.RemainingQty, round);
-
-            string symb = prevPriceBelief < priceBelief ? "↗" : (prevPriceBelief > priceBelief ? "↘" : "=");
-            //if (itemName == "Stick")
-            //    Debug.Log($"r={round} Seller {agent.name} ({prevPriceBelief}){symb}({priceBelief}) {tradeStats.SellBufferDays.ToString("F")}");
-        }
-        offers.Clear();
-
-        foreach (var bid in bids)
-        {
-            var agent = bid.agent;
-            var tradeStats = agent.TradeStats[itemName];
-            int prevPriceBelief = tradeStats.GetPriceBelief();
-            int priceBelief = tradeStats.UpdateBuyerPriceBelief(itemName, bid.Price, bid.Qty - bid.RemainingQty, round);
-            string symb = prevPriceBelief < priceBelief ? "↗" : (prevPriceBelief > priceBelief ? "↘" : "=");
-            //if (itemName == "Stick")
-            //    Debug.Log($"r={round} Buyer {agent.name} ({prevPriceBelief}){symb}({priceBelief}) {tradeStats.BuyBufferDays.ToString("F")}");
-        }
-        bids.Clear();
-
-        //var offerInfos = offers.GroupBy(x => x.agent.name).Select(x => new
+        //foreach (var offer in offers)
         //{
-        //    AgentName = x.Key,
-        //    lastOfferAttempPrice = x.Last().Price,
-        //    lastSoldPrice = x.Any(y => y.RemainingQty == 0) ? x.Last(x => x.RemainingQty == 0).Price : 0,
-        //    AvgCost = (int)x.Average(y => y.Cost)
-        //}).ToList();
-        //foreach (var obj in offerInfos)
-        //{
-        //    var agent = agents.First(x => x.name == obj.AgentName);
-        //    (int prevMinPB, int prevMaxPB) = agent.TradeStats[itemName].GetPriceBelief();
-        //    (int minPB, int maxPB) = agent.TradeStats[itemName].UpdateSellerPriceBelief(obj.lastOfferAttempPrice, obj.AvgCost, obj.lastSoldPrice);
-        //    string symb = prevMaxPB < maxPB ? "↗" : "↘";
-        //    float avgSold = agent.TradeStats[itemName].GetAvgSoldQty(20);
-        //    if (itemName == "Stick")
-        //        Debug.Log($"r={round} Seller {obj.AgentName} ({prevMinPB}-{prevMaxPB}){symb}({minPB}-{maxPB}) ({minPB - prevMinPB}, {maxPB - prevMaxPB}) {avgSold.ToString("F")}");
-        //}
-        //offers.Clear();
-
-        //var bidInfos = bids.GroupBy(x => x.agent.name).Select(x => new
-        //{
-        //    AgentName = x.Key,
-        //    lastBidAttempPrice = x.Max(y => y.Price),
-        //    lastBoughtPrice = x.Where(y => y.IsMatched).Any() ? x.Where(y => y.IsMatched).Last().Price : 0
-        //}).ToList();
-        //foreach (var bidInfo in bidInfos)
-        //{
-        //    var agent = agents.First(x => x.name == bidInfo.AgentName);
-        //    (int prevMinPB, int prevMaxPB) = agent.TradeStats[itemName].GetPriceBelief();
-        //    (int minPB, int maxPB) = agent.TradeStats[itemName].UpdateBuyerPriceBelief(bidInfo.lastBidAttempPrice, bidInfo.lastBoughtPrice);
-        //    float avgBought = agent.TradeStats[itemName].GetAvgBoughtQty(20);
-        //    string symb = prevMaxPB < maxPB ? "↗" : "↘";
-        //    if (itemName == "Stick")
-        //        Debug.Log($"r={round} Buyer {bidInfo.AgentName} ({prevMinPB}-{prevMaxPB}){symb}({minPB}-{maxPB}) ({minPB - prevMinPB}, {maxPB - prevMaxPB}) {avgBought.ToString("F")}");
+        //    var agent = offer.agent;
+        //    var tradeStats = agent.TradeStats[itemName];
+        //    tradeStats.AddSellRecord(offer.Price, offer.Qty - offer.RemainingQty, round);
         //}
 
-        //bids.Clear();
+        //foreach (var bid in bids)
+        //{
+        //    var agent = bid.agent;
+        //    var tradeStats = agent.TradeStats[itemName];
+        //    tradeStats.AddBuyRecord(bid.Price, bid.Qty - bid.RemainingQty, round);
+        //}
+
+        //foreach (var agent in agents)
+        //{
+        //    var tradeStats = agent.TradeStats[itemName];
+        //    float prevSellBufferQty = tradeStats.SellBufferQty;
+        //    float prevBuyBufferQty = tradeStats.BuyBufferQty;
+        //    float sellBufferQty = tradeStats.UpdateSellBufferQty(round);
+        //    float buyBufferQty = tradeStats.UpdateBuyBufferQty(round);
+        //    float priceBelief = tradeStats.GetPriceBelief();
+        //    if (itemName == "Food")
+        //        Debug.Log($"r={round} {agent.name} {itemName} {priceBelief} {sellBufferQty.ToString("F")} {buyBufferQty.ToString("F")} ({sellBufferQty - prevSellBufferQty}, {buyBufferQty - prevBuyBufferQty})");
+        //}
+
+        //foreach (var offer in offers)
+        //{
+        //    var agent = offer.agent;
+        //    var tradeStats = agent.TradeStats[itemName];
+        //    int prevPriceBelief = tradeStats.GetPriceBelief();
+        //    int priceBelief = tradeStats.UpdateSellerPriceBelief(itemName, offer.Price, offer.Cost, offer.Qty - offer.RemainingQty, round);
+
+        //    string symb = prevPriceBelief < priceBelief ? "↗" : (prevPriceBelief > priceBelief ? "↘" : "=");
+        //    //if (itemName == "Food")
+        //    //    Debug.Log($"r={round} Seller {agent.name} ({prevPriceBelief}){symb}({priceBelief}) {tradeStats.SellBufferQty.ToString("F")}");
+        //}
+
+        //foreach (var bid in bids)
+        //{
+        //    var agent = bid.agent;
+        //    var tradeStats = agent.TradeStats[itemName];
+        //    int prevPriceBelief = tradeStats.GetPriceBelief();
+        //    int priceBelief = tradeStats.UpdateBuyerPriceBelief(itemName, bid.Price, bid.Qty - bid.RemainingQty, round);
+        //    string symb = prevPriceBelief < priceBelief ? "↗" : (prevPriceBelief > priceBelief ? "↘" : "=");
+        //    //if (itemName == "Food")
+        //    //    Debug.Log($"r={round} Buyer {agent.name} ({prevPriceBelief}){symb}({priceBelief}) {tradeStats.BuyBufferQty.ToString("F")}");
+        //}
     }
 
     private void ExecuteTrade(Bid bid, Offer offer, int price, int qty)
     {
-        List<Item> itemsToBuy = offer.Items.Take(qty).ToList();
+        List<Item> itemsToBuy = offer.Items;
+        if (qty != offer.Items.Count)
+        {
+            itemsToBuy = new List<Item>();
+            for (int i = 0; i < qty; i++)
+            {
+                if (offer.Items.Count == 0)
+                    break;
+                itemsToBuy.Add(offer.Items[0]);
+                offer.Items.RemoveAt(0);
+            }
+        }
 
         bid.agent.Inventory.AddItem(itemsToBuy);
         offer.agent.Inventory.RemoveItem(itemsToBuy);
@@ -364,12 +422,12 @@ public class AuctionHouse : MonoBehaviour
     protected void CountStockPileAndCash()
     {
         Dictionary<string, int> stockPile = new Dictionary<string, int>();
-        Dictionary<string, List<int>> cashList = new Dictionary<string, List<int>>();
+        Dictionary<string, int> cashList = new Dictionary<string, int>();
         int totalCash = 0;
         foreach (var entry in config.commodities)
         {
             stockPile.Add(entry.name, 0);
-            cashList.Add(entry.name, new List<int>());
+            cashList.Add(entry.name, 0);
         }
 
         foreach (var agent in agents)
@@ -382,14 +440,14 @@ public class AuctionHouse : MonoBehaviour
                     stockPile[itemInfo.ItemName] += itemInfo.Qty;
             }
 
-            cashList[agent.outputs[0]].Add(agent.cash);
+            cashList[agent.outputs[0]] += agent.cash;
             totalCash += agent.cash;
         }
 
         foreach (var entry in config.commodities)
         {
             currentAuctionRecord[entry.name].Stocks = stockPile[entry.name];
-            currentAuctionRecord[entry.name].Capitals = cashList[entry.name].Sum();
+            currentAuctionRecord[entry.name].Capitals = cashList[entry.name];
         }
     }
 

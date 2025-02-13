@@ -1,8 +1,4 @@
 using AYellowpaper.SerializedCollections;
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 public class GraphController : MonoBehaviour
@@ -53,14 +49,13 @@ public class GraphController : MonoBehaviour
     public void Tick()
     {
         var AuctionStats = FindFirstObjectByType<AuctionStats>();
-        unitsProducedGraph.DrawGraph(AuctionStats.GetProducedData());
-        unitsExchangedGraph.DrawGraph(AuctionStats.GetTradesData());
-        stockPileGraph.DrawGraph(AuctionStats.GetStocksData());
-        professionsGraph.DrawGraph(AuctionStats.GetProfessionData());
-        avgPriceGraph.DrawGraph(AuctionStats.GetAvgClearingPriceData());
-        resouceConsumtionGraph.DrawGraph(AuctionStats.GetConsumedData());
+        unitsProducedGraph.DrawGraph(AuctionStats.GetProducedData(unitsProducedGraph.maxPlot));
+        unitsExchangedGraph.DrawGraph(AuctionStats.GetTradesData(unitsExchangedGraph.maxPlot));
+        stockPileGraph.DrawGraph(AuctionStats.GetStocksData(stockPileGraph.maxPlot));
+        professionsGraph.DrawGraph(AuctionStats.GetProfessionData(professionsGraph.maxPlot));
+        avgPriceGraph.DrawGraph(AuctionStats.GetAvgClearingPriceData(avgPriceGraph.maxPlot));
+        resouceConsumtionGraph.DrawGraph(AuctionStats.GetConsumedData(resouceConsumtionGraph.maxPlot));
         //cashGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.cashs.ToList()));
         //totalCapitalGraph.DrawGraph(book.ToDictionary(x => x.Key, x => x.Value.capitals.ToList()));
-
     }
 }

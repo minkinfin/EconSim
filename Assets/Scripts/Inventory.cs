@@ -1,18 +1,20 @@
+using AYellowpaper.SerializedCollections;
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Xml.Linq;
 using UnityEngine;
+using static UnityEditor.Progress;
 
 [Serializable]
 public class Inventory
 {
     [SerializeField]
-    private List<Item> Items;
+    private SerializedDictionary<string, List<Item>> Items;
     private Dictionary<string, Commodity> Book { get; set; }
     AgentConfig config;
     public Inventory(AgentConfig config)
     {
-        Items = new List<Item>();
+        Items = new SerializedDictionary<string, List<Item>>();
         this.config = config;
     }
 
@@ -24,39 +26,52 @@ public class Inventory
         for (int i = 0; i < amount; i++)
         {
             Item item = new Item(name, cost);
-            Items.Add(item);
+            if (!Items.ContainsKey(name))
+                Items.Add(name, new List<Item>());
+            Items[name].Add(item);
+        }
+    }
+
+    internal void AddItem(List<Item> items)
+    {
+        foreach (var item in items)
+        {
+            if (!Items.ContainsKey(item.Name))
+                Items.Add(item.Name, new List<Item>());
+            Items[item.Name].Add(item);
         }
     }
 
     internal List<Item> TakeItems(string name, int amount)
     {
-        if(amount <= 0)
-            return new List<Item>();
+        List<Item> results = new List<Item>();
+        if (!Items.ContainsKey(name))
+            return results;
 
-        List<Item> items = GetItems(name);
-        List<Item> takenItems = items.Take(amount).ToList();
-        Items = Items.Where(x => !takenItems.Select(y => y.Id).Contains(x.Id)).ToList();
+        amount = Math.Min(amount, Items[name].Count);
+        if (amount <= 0)
+            return results;
 
-        return takenItems;
-    }
+        for (int i = 0; i < amount; i++)
+        {
+            results.Add(Items[name][0]);
+            Items[name].RemoveAt(0);
+        }
 
-    internal List<Item> GetItems(string key)
-    {
-        return Items.Where(x => x.Name == key).ToList();
+        return results;
     }
 
     internal ItemInfo GetItemInfo(string name)
     {
-        List<Item> items = GetItems(name);
-
-        int qty = items.Count;
-
+        if (!Items.ContainsKey(name))
+            Items.Add(name, new List<Item>());
+        List<Item> items = Items[name];
         int availableSlot = config.capacityPerItem - items.Count;
         int defict = Math.Min(availableSlot, 5);
         return new ItemInfo
         {
             ItemName = name,
-            Qty = qty,
+            Qty = items.Count,
             Items = items,
             Deficit = availableSlot
         };
@@ -65,8 +80,7 @@ public class Inventory
     internal List<ItemInfo> GetItemInfos()
     {
         List<ItemInfo> itemInfos = new List<ItemInfo>();
-        List<string> itemNames = Items.Select(x => x.Name).Distinct().ToList();
-        foreach (string itemName in itemNames)
+        foreach (string itemName in Items.Keys)
         {
             ItemInfo itemInfo = GetItemInfo(itemName);
             itemInfos.Add(itemInfo);
@@ -75,13 +89,15 @@ public class Inventory
         return itemInfos;
     }
 
-    internal void AddItem(List<Item> items)
-    {
-        Items.AddRange(items);
-    }
-
     internal void RemoveItem(List<Item> items)
     {
-        Items = Items.Where(x => !items.Select(y => y.Id).Contains(x.Id)).ToList();
+        foreach (var item in items)
+        {
+            if (!Items.ContainsKey(item.Name))
+                Items.Add(item.Name, new List<Item>());
+            int index = Items[item.Name].FindIndex(x => x.Id == item.Id);
+            if (index >= 0)
+                Items[item.Name].RemoveAt(index);
+        }
     }
 }

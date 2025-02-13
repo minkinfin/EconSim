@@ -1,9 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
-using System.Linq;
 using System;
 using AYellowpaper.SerializedCollections;
-using NUnit.Framework;
 
 public class EconAgent : MonoBehaviour
 {
@@ -109,7 +107,8 @@ public class EconAgent : MonoBehaviour
                     int expectedNumUsed = material.Value;
                     int actualNumUsed = material.Value * actualNumProduced;
                     var items = Inventory.TakeItems(material.Key, actualNumUsed);
-                    buildCost += items.Sum(x => x.Cost);
+                    foreach (var item in items)
+                        buildCost += item.Cost;
 
                     expecedConsumedThisRound[material.Key] += expectedNumUsed;
                     actualConsumedThisRound[material.Key] += actualNumUsed;
@@ -158,43 +157,20 @@ public class EconAgent : MonoBehaviour
         return consumed;
     }
 
-    public List<Item> Buy(string itemName, int qty, int price, int bidPrice, int round, List<Item> items)
+    public Dictionary<string, List<Bid>> CreateBids()
     {
-        if (price * qty > cash)
-        {
-            qty = cash / price;
-        }
-        List<Item> itemsToBuy = items.Take(qty).ToList();
-        if (itemsToBuy.Count <= 0)
-            return itemsToBuy;
-
-        Inventory.AddItem(itemsToBuy);
-        TradeStats[itemName].AddBuyRecord(bidPrice, qty, round);
-        cash -= price * qty;
-        Assert.IsTrue(cash >= 0, $"{round} {itemName}");
-        return itemsToBuy;
-    }
-    public void Sell(string itemName, int qty, int price, int round)
-    {
-        Inventory.TakeItems(itemName, qty);
-        TradeStats[itemName].AddSellRecord(price, qty, round);
-        cash += price * qty;
-    }
-
-    public List<Bid> CreateBids()
-    {
-        var bids = new List<Bid>();
+        var bids = new Dictionary<string, List<Bid>>();
+        int cheapestRecipeCost = int.MaxValue;
         foreach (var com in config.commodities)
         {
             string itemName = com.name;
             if (outputs.Contains(itemName))
             {
-                List<List<Bid>> bidsByRecipes = new List<List<Bid>>();
                 Dictionary<string, int> materialBuyPriceDict = new Dictionary<string, int>();
                 for (int i = 0; i < com.recipes.Count; i++)
                 {
                     var recipe = com.recipes[i];
-                    bidsByRecipes.Add(new List<Bid>());
+                    var bidsByRecipe = new Dictionary<string, List<Bid>>();
                     foreach (var material in recipe.materials)
                     {
                         int buyCount = FindBuyCount(material.Key);
@@ -211,16 +187,21 @@ public class EconAgent : MonoBehaviour
 
                         if (buyCount > 0)
                         {
-                            bidsByRecipes[i].Add(new Bid(material.Key, buyPrice, buyCount, this));
+                            if (!bidsByRecipe.ContainsKey(material.Key))
+                                bidsByRecipe.Add(material.Key, new List<Bid>());
+                            bidsByRecipe[material.Key].Add(new Bid(material.Key, buyPrice, buyCount, this));
+                            buyCount -= material.Value;
                         }
                     }
-                }
-                if (bidsByRecipes.Count > 0)
-                {
-                    var cheapestRecipe = bidsByRecipes.OrderBy(x => x.Sum(y => y.Price * y.Qty)).First();
-                    if (cheapestRecipe.Count > 0)
+
+                    int currentRecipeCost = 0;
+                    foreach (var bid in bidsByRecipe)
+                        foreach (var item in bid.Value)
+                            currentRecipeCost += item.Price * item.Qty;
+                    if (currentRecipeCost < cheapestRecipeCost)
                     {
-                        bids.AddRange(cheapestRecipe);
+                        bids = bidsByRecipe;
+                        cheapestRecipeCost = currentRecipeCost;
                     }
                 }
             }
@@ -230,17 +211,19 @@ public class EconAgent : MonoBehaviour
                 if (buyCount > 0)
                 {
                     int buyPrice = CalculateBuyPrice(itemName);
-                    bids.Add(new Bid(itemName, buyPrice, buyCount, this));
+                    if (!bids.ContainsKey(itemName))
+                        bids.Add(itemName, new List<Bid>());
+                    bids[itemName].Add(new Bid(itemName, buyPrice, buyCount, this));
                 }
             }
         }
 
         return bids;
     }
-    public List<Offer> CreateOffers()
+    public Dictionary<string, List<Offer>> CreateOffers()
     {
         //sell everything not needed by output
-        var offers = new List<Offer>();
+        var offers = new Dictionary<string, List<Offer>>();
 
         foreach (var itemInfo in Inventory.GetItemInfos())
         {
@@ -255,7 +238,11 @@ public class EconAgent : MonoBehaviour
             if (sellQuantity == 0)
                 continue;
 
-            var sellItems = itemInfo.Items.Take(sellQuantity).ToList();
+            var sellItems = new List<Item> ();
+            for (int i = 0; i < itemInfo.Items.Count; i++)
+            {
+                sellItems.Add(itemInfo.Items[i]);
+            }
             TradeStats tradeStats = TradeStats[itemName];
             //var sellItemsGroupByCost = sellItems
             //.GroupBy(x => x.Cost)
@@ -266,9 +253,17 @@ public class EconAgent : MonoBehaviour
             //    offers.Add(new Offer(itemName, sellPrice, group.Count, this, group.Cost, group.Items));
             //}
 
-            int avgCost = sellItems.Sum(x => x.Cost) / sellItems.Count;
+            int sumSellCost = 0;
+            foreach (var item in sellItems)
+            {
+                sumSellCost += item.Cost;
+            }
+            int avgCost = sumSellCost / sellItems.Count;
             int sellPrice = CalculateSellPrice(tradeStats, avgCost);
-            offers.Add(new Offer(itemName, sellPrice, sellQuantity, this, avgCost, sellItems));
+
+            if (!offers.ContainsKey(itemName))
+                offers.Add(itemName, new List<Offer>());
+            offers[itemName].Add(new Offer(itemName, sellPrice, sellQuantity, this, avgCost, sellItems));
         }
 
         return offers;
@@ -278,21 +273,21 @@ public class EconAgent : MonoBehaviour
     {
         var itemInfo = Inventory.GetItemInfo(c);
         int numBids = itemInfo.Deficit;
-        if (config.enablePriceFavorability)
-        {
-            var avgPrice = TradeStats[c].GetAvgBuyPrice(config.historySize);
-            var lowestPrice = TradeStats[c].GetLowestBuyPrice();
-            var highestPrice = TradeStats[c].GetHighestBuyPrice();
-            //todo SANITY check
-            float favorability = .5f;
-            if (lowestPrice != highestPrice)
-            {
-                favorability = Mathf.InverseLerp(lowestPrice, highestPrice, avgPrice);
-                favorability = Mathf.Clamp(favorability, 0, 1);
-                //float favorability = FindTradeFavorability(c);
-                numBids = Mathf.Max(0, (int)((1f - favorability) * numBids));
-            }
-        }
+        //if (config.enablePriceFavorability)
+        //{
+        //    var avgPrice = TradeStats[c].GetAvgBuyPrice(config.historySize);
+        //    var lowestPrice = TradeStats[c].GetLowestBuyPrice();
+        //    var highestPrice = TradeStats[c].GetHighestBuyPrice();
+        //    //todo SANITY check
+        //    float favorability = .5f;
+        //    if (lowestPrice != highestPrice)
+        //    {
+        //        favorability = Mathf.InverseLerp(lowestPrice, highestPrice, avgPrice);
+        //        favorability = Mathf.Clamp(favorability, 0, 1);
+        //        //float favorability = FindTradeFavorability(c);
+        //        numBids = Mathf.Max(0, (int)((1f - favorability) * numBids));
+        //    }
+        //}
         //if (c == "Food" && config.foodConsumptionRate > 0 && itemInfo.Qty == 0)
         //{
         //    float buyProb = Mathf.Lerp(0, config.maxStavationDays, starvationDay);
@@ -301,7 +296,8 @@ public class EconAgent : MonoBehaviour
         //    if (rand < buyProb)
         //        numBids = Mathf.Max(numBids, 1);
         //}
-        if (c == "Food" && config.foodConsumptionRate > 0 && itemInfo.Qty > 0)
+
+        if (c == "Food" && itemInfo.Qty > 0)
             numBids = 0;
 
         return numBids;

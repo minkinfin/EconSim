@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using TMPro;
 using UnityEngine;
 
@@ -37,17 +36,13 @@ public class MultiLineChartManager : MonoBehaviour
     {
         int maxHeight = 1;
 
-        var filteredData = graphData.Values.SelectMany(x => x.Count > maxPlot ? x.Skip(x.Count - maxPlot).ToList() : x);
-        if (filteredData.Count() > 0)
-            maxHeight = filteredData.Max();
+        foreach (var values in graphData.Values)
+            foreach (var value in values)
+                maxHeight = Mathf.Max(maxHeight, value);
 
-        for (int i = 0; i < graphData.Count; i++)
+        foreach (var obj in graphData)
         {
-            string key = graphData.ElementAt(i).Key;
-            List<int> data = graphData[key];
-            if (data.Count > maxPlot)
-                data = data.Skip(data.Count - maxPlot).ToList();
-            lineGraphRenderers[key].ShowGraph(data, maxHeight);
+            lineGraphRenderers[obj.Key].ShowGraph(obj.Value, maxHeight);
         }
     }
 }

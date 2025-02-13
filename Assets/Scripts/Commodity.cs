@@ -1,7 +1,5 @@
-﻿using AYellowpaper.SerializedCollections;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 
 [Serializable]
 public class Commodity
@@ -12,6 +10,11 @@ public class Commodity
 
     internal List<string> FindInputs()
     {
-        return recipes.SelectMany(x => x.materials.Keys).Distinct().ToList();
+    List<string> inputs = new List<string>();
+        foreach (var recipe in recipes)
+            foreach (var material in recipe.materials.Keys)
+                if (!inputs.Contains(material))
+                    inputs.Add(material);
+        return inputs;
     }
 }
